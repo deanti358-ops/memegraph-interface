@@ -11,7 +11,12 @@ import {
 import { BrowserProvider, JsonRpcProvider, type Signer } from "ethers";
 import { network } from "../config";
 import { EthersAdapter, HashPackAdapter, type TxAdapter } from "./tx";
-import { getHashConnect, initHashConnect, accountEvmAddress } from "./hashpack";
+import {
+  getHashConnect,
+  initHashConnect,
+  resetHashConnect,
+  accountEvmAddress,
+} from "./hashpack";
 
 type Eip1193 = {
   request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
@@ -155,6 +160,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       ]);
       getHashConnect().openPairingModal();
     } catch (e) {
+      // Start the next attempt from scratch rather than reusing a socket
+      // that may be stuck retrying with stale state.
+      resetHashConnect();
       setWalletError(
         (e as Error).message === "relay-timeout"
           ? "Couldn't reach the WalletConnect relay. Make sure your computer's clock and time zone are set correctly, then try again."

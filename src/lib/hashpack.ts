@@ -13,6 +13,17 @@ const appMetadata = {
 let instance: HashConnect | null = null;
 let initPromise: Promise<SessionData | null> | null = null;
 
+/**
+ * Throw away the current HashConnect instance and init state. Used after a
+ * failed/timed-out connection attempt so the next try starts from scratch
+ * instead of reusing a socket stuck in a retry loop (e.g. after the user
+ * fixes a skewed system clock without reloading the page).
+ */
+export function resetHashConnect() {
+  instance = null;
+  initPromise = null;
+}
+
 export function getHashConnect(): HashConnect {
   if (!instance) {
     instance = new HashConnect(
@@ -45,15 +56,24 @@ export function initHashConnect(
         }
       });
       hc.disconnectionEvent.on(() => onDisconnect());
-      hc.init().then(() => {
-        // Give a restored session a moment to emit; else report none.
-        setTimeout(() => {
+      hc.init()
+        .then(() => {
+          // Give a restored session a moment to emit; else report none.
+          setTimeout(() => {
+            if (!resolved) {
+              resolved = true;
+              resolve(null);
+            }
+          }, 400);
+        })
+        .catch(() => {
+          // Failed init must not poison future attempts.
+          resetHashConnect();
           if (!resolved) {
             resolved = true;
             resolve(null);
           }
-        }, 400);
-      });
+        });
     });
   } else {
     // Later callers still want fresh events routed to them.
