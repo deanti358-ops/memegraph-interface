@@ -165,7 +165,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       resetHashConnect();
       setWalletError(
         (e as Error).message === "relay-timeout"
-          ? "Couldn't reach the WalletConnect relay. Make sure your computer's clock and time zone are set correctly, then try again."
+          ? "Couldn't reach the WalletConnect relay (relay.walletconnect.com). Usual causes: a wrong system clock/time zone, or a DNS/network problem resolving that domain — switching DNS to 1.1.1.1 or 8.8.8.8 often fixes it."
           : `HashPack connection failed: ${(e as Error).message}`
       );
     } finally {
