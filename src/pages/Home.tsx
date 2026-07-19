@@ -169,6 +169,7 @@ export default function Home() {
       )}
 
       {sorted && sorted.length > 0 && (
+        <div className="table-wrap">
         <table className="table market-table">
           <thead>
             <tr>
@@ -214,6 +215,7 @@ export default function Home() {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );

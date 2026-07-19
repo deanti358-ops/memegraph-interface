@@ -479,6 +479,26 @@ input:focus {
     flex-direction: column;
     align-items: flex-start;
   }
+  /* Topbar: nav drops to its own row instead of forcing page width */
+  .topbar {
+    flex-wrap: wrap;
+    row-gap: 0.55rem;
+    column-gap: 0.8rem;
+  }
+  .topbar nav {
+    order: 3;
+    flex-basis: 100%;
+    gap: 0.9rem;
+    overflow-x: auto;
+    padding-bottom: 0.15rem;
+  }
+  .net-pill {
+    display: none; /* footer still shows network status */
+  }
+  .tp-stats {
+    flex-wrap: wrap;
+    gap: 0.9rem;
+  }
 }
 .tabs {
   display: flex;
@@ -605,6 +625,14 @@ input:focus {
 }
 
 /* ---- table ---- */
+/* Wide tables scroll inside their own container — the page itself must
+   never scroll horizontally (this was pushing the whole dapp off-center
+   on phones). */
+.table-wrap {
+  overflow-x: auto;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
 .table {
   width: 100%;
   border-collapse: collapse;

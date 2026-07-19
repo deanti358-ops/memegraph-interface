@@ -61,6 +61,7 @@ export default function Creators() {
             </div>
           </div>
 
+          <div className="table-wrap">
           <table className="table">
             <thead>
               <tr>
@@ -110,6 +111,7 @@ export default function Creators() {
               ))}
             </tbody>
           </table>
+          </div>
 
           <p className="muted small">
             Creator earnings come from each token's on-chain vesting ledger;
