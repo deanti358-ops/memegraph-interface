@@ -17,6 +17,8 @@ import {
   type MemeInfo,
 } from "../lib/memegraph";
 import { DEFAULT_SLIPPAGE_BPS, network } from "../config";
+import PriceChart from "../components/PriceChart";
+import { fetchPriceHistory, type PricePoint } from "../lib/priceHistory";
 
 type Details = MemeInfo & {
   price: bigint;
@@ -33,6 +35,7 @@ export default function Token() {
   const { adapter, evmAddress, displayAccount } = useWallet();
 
   const [d, setD] = useState<Details | null>(null);
+  const [history, setHistory] = useState<PricePoint[] | null>(null);
   const [balance, setBalance] = useState<bigint | null>(null);
   const [tab, setTab] = useState<"buy" | "sell">("buy");
   const [amount, setAmount] = useState("");
@@ -78,6 +81,14 @@ export default function Token() {
     } else {
       setBalance(null);
     }
+
+    // Price history from pool events (fire-and-forget; mirror node lags a
+    // few seconds behind consensus, so this may trail fresh trades briefly).
+    const seed = await factory.poolSeed().catch(() => 500_000_000n);
+    const seedPrice = Number(seed) / 1e8 / 1_000_000_000;
+    fetchPriceHistory(m.pool, Number(m.launchedAt), seedPrice)
+      .then(setHistory)
+      .catch(() => setHistory([]));
   }, [id, evmAddress]);
 
   useEffect(() => {
@@ -210,6 +221,15 @@ export default function Token() {
           <div className="muted">per token</div>
         </div>
       </div>
+
+      <section className="panel chart-panel">
+        <h2>Price · ℏ per {d.symbol ?? "token"}</h2>
+        {history === null ? (
+          <div className="muted small">Loading trade history…</div>
+        ) : (
+          <PriceChart points={history} symbol={d.symbol ?? "token"} />
+        )}
+      </section>
 
       <div className="token-layout">
         <section className="panel">

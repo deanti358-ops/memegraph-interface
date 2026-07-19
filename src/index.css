@@ -508,6 +508,51 @@ input:focus {
   font-size: 0.92rem;
 }
 
+/* ---- price chart ---- */
+.chart-panel {
+  margin-bottom: 1rem;
+}
+.chart-wrap {
+  position: relative;
+}
+.chart-wrap svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  outline: none;
+}
+.chart-tooltip {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.35rem 0.6rem;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  pointer-events: none;
+  white-space: nowrap;
+  font-size: 0.85rem;
+}
+.chart-key {
+  display: inline-block;
+  width: 12px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+}
+.chart-table summary {
+  cursor: pointer;
+  margin-top: 0.4rem;
+}
+.table.small td,
+.table.small th {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.82rem;
+}
+
 /* ---- stat tiles ---- */
 .stat-tiles {
   display: grid;
