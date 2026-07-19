@@ -1,54 +1,29 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  fetchMemes,
-  fmtHbar,
-  fmtPrice,
-  poolRead,
-  shortAddr,
-  type MemeInfo,
-} from "../lib/memegraph";
+import { fmtHbar, fmtPrice, fmtTokens, shortAddr } from "../lib/memegraph";
+import { fetchNetworkStats, type TokenStats } from "../lib/stats";
 import { network } from "../config";
 
-type Row = MemeInfo & { price?: bigint; hbarReserve?: bigint };
+type SortKey = "price" | "changePct" | "hbarReserve" | "volumeTinybar" | "trades";
+
+function fmtChange(pct: number | null): string {
+  if (pct === null) return "—";
+  const sign = pct >= 0 ? "+" : "";
+  return `${sign}${pct.toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
+}
 
 export default function Home() {
-  const [rows, setRows] = useState<Row[] | null>(null);
+  const [tokens, setTokens] = useState<TokenStats[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [centsPerHbar, setCentsPerHbar] = useState<number | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("volumeTinybar");
+  const [sortDesc, setSortDesc] = useState(true);
 
   useEffect(() => {
     let alive = true;
-    (async () => {
-      try {
-        const memes = await fetchMemes();
-        if (!alive) return;
-        setRows(memes);
-        for (const m of memes) {
-          try {
-            const pool = poolRead(m.pool);
-            const [price, reserves] = await Promise.all([
-              pool.getPrice(),
-              pool.getReserves(),
-            ]);
-            if (!alive) return;
-            setRows((prev) =>
-              prev
-                ? prev.map((r) =>
-                    r.id === m.id
-                      ? { ...r, price, hbarReserve: reserves[0] }
-                      : r
-                  )
-                : prev
-            );
-          } catch {
-            /* pool unreadable; leave blank */
-          }
-        }
-      } catch (e) {
-        if (alive) setError(String(e));
-      }
-    })();
+    fetchNetworkStats()
+      .then((s) => alive && setTokens(s.tokens))
+      .catch((e) => alive && setError(String(e)));
     // Live HBAR/USD rate from the network's own fee schedule
     fetch(`${network.mirrorNodeUrl}/network/exchangerate`)
       .then((r) => r.json())
@@ -66,22 +41,49 @@ export default function Home() {
   }, []);
 
   const tvl = useMemo(() => {
-    if (!rows) return null;
-    let sum = 0n;
-    let counted = 0;
-    for (const r of rows) {
-      if (r.hbarReserve !== undefined) {
-        sum += r.hbarReserve;
-        counted++;
-      }
-    }
-    return counted > 0 ? sum : null;
-  }, [rows]);
+    if (!tokens || tokens.length === 0) return null;
+    return tokens.reduce((a, t) => a + t.hbarReserve, 0n);
+  }, [tokens]);
 
   const tvlUsd =
     tvl !== null && centsPerHbar !== null
       ? (Number(tvl) / 1e8) * (centsPerHbar / 100)
       : null;
+
+  const topPerformer = useMemo(() => {
+    if (!tokens || tokens.length === 0) return null;
+    return [...tokens].sort(
+      (a, b) => (b.changePct ?? -Infinity) - (a.changePct ?? -Infinity)
+    )[0];
+  }, [tokens]);
+
+  const sorted = useMemo(() => {
+    if (!tokens) return null;
+    const dir = sortDesc ? -1 : 1;
+    return [...tokens].sort((a, b) => {
+      const av = a[sortKey] ?? 0;
+      const bv = b[sortKey] ?? 0;
+      return av === bv ? 0 : (av < bv ? -1 : 1) * -dir * -1;
+    });
+  }, [tokens, sortKey, sortDesc]);
+
+  function onSort(key: SortKey) {
+    if (key === sortKey) setSortDesc((d) => !d);
+    else {
+      setSortKey(key);
+      setSortDesc(true);
+    }
+  }
+
+  const Th = ({ k, children }: { k: SortKey; children: React.ReactNode }) => (
+    <th
+      className={sortKey === k ? "sorted" : ""}
+      onClick={() => onSort(k)}
+      title="Sort"
+    >
+      {children} {sortKey === k ? (sortDesc ? "↓" : "↑") : ""}
+    </th>
+  );
 
   return (
     <div className="page">
@@ -110,49 +112,109 @@ export default function Home() {
                 maximumFractionDigits: 2,
               })} USD · `
             : ""}
-          locked permanently across {rows?.length ?? "…"} meme pool
-          {rows && rows.length === 1 ? "" : "s"} — reserves can never be
+          locked permanently across {tokens?.length ?? "…"} meme pool
+          {tokens && tokens.length === 1 ? "" : "s"} — reserves can never be
           withdrawn.
         </div>
       </div>
 
+      {topPerformer && (
+        <Link to={`/t/${topPerformer.id}`} className="top-performer">
+          <div>
+            <div className="tp-label">🔥 Top performing memecoin</div>
+            <div className="tp-name">
+              {topPerformer.name ?? "…"}{" "}
+              <span className="token-symbol">{topPerformer.symbol ?? ""}</span>
+            </div>
+            <div className="muted small mono">
+              by {shortAddr(topPerformer.creator)}
+            </div>
+          </div>
+          <dl className="tp-stats">
+            <div>
+              <dt>Since launch</dt>
+              <dd
+                className={
+                  (topPerformer.changePct ?? 0) >= 0 ? "delta-up" : "delta-down"
+                }
+              >
+                {fmtChange(topPerformer.changePct)}
+              </dd>
+            </div>
+            <div>
+              <dt>Price</dt>
+              <dd>{fmtPrice(topPerformer.price)} ℏ</dd>
+            </div>
+            <div>
+              <dt>Volume</dt>
+              <dd>{fmtHbar(topPerformer.volumeTinybar)} ℏ</dd>
+            </div>
+            <div>
+              <dt>Creator earned</dt>
+              <dd>
+                {fmtTokens(topPerformer.creatorAccrued)}{" "}
+                {topPerformer.symbol ?? ""}
+              </dd>
+            </div>
+          </dl>
+        </Link>
+      )}
+
       {error && <div className="error">Failed to load: {error}</div>}
-      {!rows && !error && <div className="muted">Loading tokens…</div>}
-      {rows && rows.length === 0 && (
+      {!tokens && !error && <div className="muted">Loading the market…</div>}
+      {tokens && tokens.length === 0 && (
         <div className="empty">
           No memes launched yet. <Link to="/launch">Be the first.</Link>
         </div>
       )}
 
-      <div className="grid">
-        {rows?.map((m) => (
-          <Link to={`/t/${m.id}`} key={m.id} className="card">
-            <div className="card-head">
-              <span className="token-symbol">{m.symbol ?? "…"}</span>
-              <span className="badge">#{m.id}</span>
-            </div>
-            <div className="token-name">{m.name ?? "Loading…"}</div>
-            <dl className="card-stats">
-              <div>
-                <dt>Price</dt>
-                <dd>{m.price !== undefined ? `${fmtPrice(m.price)} ℏ` : "—"}</dd>
-              </div>
-              <div>
-                <dt>Liquidity</dt>
-                <dd>
-                  {m.hbarReserve !== undefined
-                    ? `${fmtHbar(m.hbarReserve)} ℏ`
-                    : "—"}
-                </dd>
-              </div>
-              <div>
-                <dt>Creator</dt>
-                <dd className="mono">{shortAddr(m.creator)}</dd>
-              </div>
-            </dl>
-          </Link>
-        ))}
-      </div>
+      {sorted && sorted.length > 0 && (
+        <table className="table market-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Token</th>
+              <Th k="price">Price</Th>
+              <Th k="changePct">Since launch</Th>
+              <Th k="hbarReserve">Liquidity</Th>
+              <Th k="volumeTinybar">Volume</Th>
+              <Th k="trades">Trades</Th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((t) => (
+              <tr key={t.id}>
+                <td className="muted">{t.id}</td>
+                <td>
+                  <Link to={`/t/${t.id}`}>
+                    <strong>{t.symbol ?? shortAddr(t.token)}</strong>
+                  </Link>{" "}
+                  <span className="muted small">{t.name ?? ""}</span>
+                </td>
+                <td className="mono">{fmtPrice(t.price)} ℏ</td>
+                <td
+                  className={
+                    (t.changePct ?? 0) >= 0
+                      ? "mono delta-up"
+                      : "mono delta-down"
+                  }
+                >
+                  {fmtChange(t.changePct)}
+                </td>
+                <td className="mono">{fmtHbar(t.hbarReserve)} ℏ</td>
+                <td className="mono">{fmtHbar(t.volumeTinybar)} ℏ</td>
+                <td className="mono">{t.trades}</td>
+                <td>
+                  <Link to={`/t/${t.id}`} className="link">
+                    Trade →
+                  </Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

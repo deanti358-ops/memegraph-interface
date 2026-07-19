@@ -14,11 +14,13 @@ const W = 640;
 const H = 220;
 const PAD = { top: 14, right: 74, bottom: 26, left: 10 };
 
-const SERIES = "#9a6bff"; // validated vs #14121b surface (dataviz checks)
-const SURFACE = "#14121b";
-const GRID = "#211d2c"; // one step off the surface
-const TEXT_DIM = "#8b8499";
-const TEXT_BRIGHT = "#f4f2f8";
+/* Theme-aware via CSS variables — per-theme values are validated with the
+   dataviz palette checks (#9a6bff on the dark surface, #7c3aed on light). */
+const SERIES = "var(--chart-series)";
+const SURFACE = "var(--bg-panel)";
+const GRID = "var(--chart-grid)";
+const TEXT_DIM = "var(--text-dim)";
+const TEXT_BRIGHT = "var(--text-bright)";
 
 function fmtPriceShort(p: number): string {
   if (p === 0) return "0";
@@ -133,9 +135,9 @@ export default function PriceChart({
         {/* recessive gridlines */}
         {gridYs.map((g, i) => (
           <g key={i}>
-            <line x1={PAD.left} x2={W - PAD.right} y1={g.Y} y2={g.Y} stroke={GRID} strokeWidth="1" />
+            <line x1={PAD.left} x2={W - PAD.right} y1={g.Y} y2={g.Y} style={{ stroke: GRID }} strokeWidth="1" />
             {g.showValue && (
-              <text x={W - PAD.right + 6} y={g.Y + 3.5} fontSize="10" fill={TEXT_DIM}>
+              <text x={W - PAD.right + 6} y={g.Y + 3.5} fontSize="10" style={{ fill: TEXT_DIM }}>
                 {fmtPriceShort(g.p)}
               </text>
             )}
@@ -143,13 +145,13 @@ export default function PriceChart({
         ))}
 
         {/* area wash + line */}
-        <path d={area} fill={SERIES} opacity="0.1" />
-        <path d={path} fill="none" stroke={SERIES} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        <path d={area} style={{ fill: SERIES }} opacity="0.1" />
+        <path d={path} fill="none" style={{ stroke: SERIES }} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
 
         {/* end-dot with surface ring + direct label for the last price */}
-        <circle cx={last.X} cy={last.Y} r="6" fill={SURFACE} />
-        <circle cx={last.X} cy={last.Y} r="4" fill={SERIES} />
-        <text x={last.X + 10} y={last.Y + 4} fontSize="11" fontWeight="600" fill={TEXT_BRIGHT}>
+        <circle cx={last.X} cy={last.Y} r="6" style={{ fill: SURFACE }} />
+        <circle cx={last.X} cy={last.Y} r="4" style={{ fill: SERIES }} />
+        <text x={last.X + 10} y={last.Y + 4} fontSize="11" fontWeight="600" style={{ fill: TEXT_BRIGHT }}>
           {fmtPriceShort(last.price)} ℏ
         </text>
 
@@ -160,7 +162,7 @@ export default function PriceChart({
             x={t.X}
             y={H - 8}
             fontSize="10"
-            fill={TEXT_DIM}
+            style={{ fill: TEXT_DIM }}
             textAnchor={i === 0 ? "start" : i === ticksX.length - 1 ? "end" : "middle"}
           >
             {fmtTime(t.t, spanT)}
@@ -170,9 +172,9 @@ export default function PriceChart({
         {/* crosshair + hovered point */}
         {hovered && (
           <g pointerEvents="none">
-            <line x1={hovered.X} x2={hovered.X} y1={PAD.top} y2={H - PAD.bottom} stroke={TEXT_DIM} strokeWidth="1" opacity="0.55" />
-            <circle cx={hovered.X} cy={hovered.Y} r="6" fill={SURFACE} />
-            <circle cx={hovered.X} cy={hovered.Y} r="4" fill={SERIES} />
+            <line x1={hovered.X} x2={hovered.X} y1={PAD.top} y2={H - PAD.bottom} style={{ stroke: TEXT_DIM }} strokeWidth="1" opacity="0.55" />
+            <circle cx={hovered.X} cy={hovered.Y} r="6" style={{ fill: SURFACE }} />
+            <circle cx={hovered.X} cy={hovered.Y} r="4" style={{ fill: SERIES }} />
           </g>
         )}
       </svg>

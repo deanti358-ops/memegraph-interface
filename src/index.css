@@ -17,6 +17,9 @@
   --glow-purple: #b18aff;
   --green: #4ade80;
   --red: #f87171;
+  /* chart series colors are theme-specific and validated (dataviz checks) */
+  --chart-series: #9a6bff;
+  --chart-grid: #251d3d;
   --mono: "Space Grotesk", ui-monospace, Consolas, monospace;
   --sans: system-ui, "Segoe UI", Roboto, sans-serif;
   --display: "Kanit", system-ui, sans-serif;
@@ -27,6 +30,28 @@
   background:
     radial-gradient(1200px 500px at 80% -10%, rgba(255, 62, 200, 0.08), transparent 60%),
     radial-gradient(900px 500px at 10% 0%, rgba(51, 230, 221, 0.07), transparent 55%),
+    var(--bg);
+  background-attachment: fixed;
+}
+
+:root[data-theme="light"] {
+  --bg: #f8f7fb;
+  --bg-raised: #ffffff;
+  --bg-panel: #ffffff;
+  --border: #e6e2ef;
+  --text: #4a4458;
+  --text-dim: #746d85;
+  --text-bright: #17131f;
+  --glow-purple: #7c3aed;
+  --green: #16a34a;
+  --red: #dc2626;
+  --chart-series: #7c3aed;
+  --chart-grid: #eceaf2;
+
+  color-scheme: light;
+  background:
+    radial-gradient(1200px 500px at 80% -10%, rgba(255, 62, 200, 0.06), transparent 60%),
+    radial-gradient(900px 500px at 10% 0%, rgba(51, 230, 221, 0.05), transparent 55%),
     var(--bg);
   background-attachment: fixed;
 }
@@ -540,7 +565,7 @@ input:focus {
   display: inline-block;
   width: 12px;
   height: 2px;
-  background: var(--accent);
+  background: var(--chart-series);
   border-radius: 1px;
 }
 .chart-table summary {
@@ -675,4 +700,166 @@ input:focus {
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
+}
+
+/* ---- theme toggle ---- */
+.theme-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px;
+  background: var(--bg-raised);
+}
+.theme-toggle button {
+  border: none;
+  background: none;
+  color: var(--text-dim);
+  border-radius: 999px;
+  width: 30px;
+  height: 26px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: 0.85rem;
+}
+.theme-toggle button.active {
+  background: var(--grad-soft);
+  color: var(--text-bright);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+/* ---- footer socials & contact ---- */
+.socials {
+  display: flex;
+  gap: 0.7rem;
+  margin-top: 0.9rem;
+}
+.socials a {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-dim);
+}
+.socials a:hover {
+  color: var(--text-bright);
+  border-color: var(--glow-purple);
+}
+.socials svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+/* ---- chart timeframes ---- */
+.tf-row {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 0.8rem;
+  flex-wrap: wrap;
+}
+.tf-btn {
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-dim);
+  border-radius: 8px;
+  padding: 0.2rem 0.65rem;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.tf-btn.active {
+  color: var(--text-bright);
+  border-color: var(--glow-purple);
+  background: var(--grad-soft);
+}
+
+/* ---- top performer ---- */
+.top-performer:hover {
+  text-decoration: none;
+  border-color: var(--glow-purple);
+}
+.top-performer {
+  color: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: var(--grad-soft);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1.1rem 1.3rem;
+  margin-bottom: 1.6rem;
+  flex-wrap: wrap;
+}
+.tp-label {
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 0.2rem;
+}
+.tp-name {
+  font-family: var(--display);
+  font-size: 1.3rem;
+  color: var(--text-bright);
+}
+.tp-stats {
+  display: flex;
+  gap: 1.6rem;
+  flex-wrap: wrap;
+}
+.tp-stats div {
+  text-align: right;
+}
+.tp-stats dt {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+}
+.tp-stats dd {
+  margin: 0;
+  font-family: var(--mono);
+  color: var(--text-bright);
+}
+.delta-up {
+  color: var(--green);
+}
+.delta-down {
+  color: var(--red);
+}
+
+/* ---- market table ---- */
+.market-table th {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.market-table th.sorted {
+  color: var(--text-bright);
+}
+.market-table td {
+  white-space: nowrap;
+}
+
+/* ---- whitepaper ---- */
+.whitepaper {
+  max-width: 720px;
+}
+.whitepaper section {
+  margin-top: 2rem;
+}
+.whitepaper p,
+.whitepaper li {
+  line-height: 1.7;
+}
+.whitepaper ul {
+  padding-left: 1.2rem;
+}
+.whitepaper li {
+  margin-bottom: 0.4rem;
+}
+.whitepaper table {
+  margin-top: 0.6rem;
 }

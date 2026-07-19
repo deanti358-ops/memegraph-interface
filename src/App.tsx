@@ -2,11 +2,70 @@ import { useState } from "react";
 import { Link, NavLink, Route, Routes } from "react-router-dom";
 import { useWallet } from "./lib/wallet";
 import { shortAddr } from "./lib/memegraph";
-import { network, ACTIVE_NETWORK } from "./config";
+import { network, ACTIVE_NETWORK, CONTACT_EMAIL, SOCIALS } from "./config";
+import { applyTheme, type Theme } from "./lib/theme";
 import Home from "./pages/Home";
 import Launch from "./pages/Launch";
 import Token from "./pages/Token";
 import Creators from "./pages/Creators";
+import Whitepaper from "./pages/Whitepaper";
+
+function ThemeToggle() {
+  const [theme, setTheme] = useState<Theme>(
+    (document.documentElement.dataset.theme as Theme) ?? "dark"
+  );
+  const set = (t: Theme) => {
+    applyTheme(t);
+    setTheme(t);
+  };
+  return (
+    <span className="theme-toggle" role="group" aria-label="Color theme">
+      <button
+        className={theme === "light" ? "active" : ""}
+        onClick={() => set("light")}
+        title="Light mode"
+        aria-pressed={theme === "light"}
+      >
+        ☀
+      </button>
+      <button
+        className={theme === "dark" ? "active" : ""}
+        onClick={() => set("dark")}
+        title="Dark mode"
+        aria-pressed={theme === "dark"}
+      >
+        ☾
+      </button>
+    </span>
+  );
+}
+
+function SocialLinks() {
+  return (
+    <div className="socials">
+      <a href={SOCIALS.x} target="_blank" rel="noreferrer" title="X / Twitter">
+        <svg viewBox="0 0 24 24" aria-hidden>
+          <path d="M18.9 2H22l-6.8 7.8L23.2 22h-6.3l-4.9-6.4L6.4 22H3.3l7.3-8.3L1.6 2H8l4.4 5.9L18.9 2zm-1.1 18.1h1.7L7.1 3.8H5.3l12.5 16.3z" />
+        </svg>
+      </a>
+      <a href={SOCIALS.github} target="_blank" rel="noreferrer" title="GitHub">
+        <svg viewBox="0 0 24 24" aria-hidden>
+          <path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.2.8-.6v-2c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.4-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0C17.2 4.9 18.2 5.2 18.2 5.2c.6 1.6.2 2.8.1 3.1.7.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.2c0 .3.2.7.8.6a11.5 11.5 0 0 0 7.8-10.9C23.5 5.7 18.3.5 12 .5z" />
+        </svg>
+      </a>
+      <a href={SOCIALS.discord} target="_blank" rel="noreferrer" title="Discord">
+        <svg viewBox="0 0 24 24" aria-hidden>
+          <path d="M20.3 4.4A19.8 19.8 0 0 0 15.9 3l-.6 1.2a18.3 18.3 0 0 0-6.6 0L8.1 3a19.8 19.8 0 0 0-4.4 1.4C.9 8.6.1 12.7.5 16.7A20 20 0 0 0 6 19.5l1.3-1.9c-.7-.3-1.4-.6-2-1l.5-.4a14.2 14.2 0 0 0 12.4 0l.5.4c-.6.4-1.3.7-2 1l1.3 1.9a20 20 0 0 0 5.5-2.8c.5-4.6-.7-8.7-3.2-12.3zM8.5 14.2c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2zm7 0c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2z" />
+        </svg>
+      </a>
+      <a href={`mailto:${CONTACT_EMAIL}`} title="Contact us">
+        <svg viewBox="0 0 24 24" aria-hidden>
+          <path d="M2 5.5A2.5 2.5 0 0 1 4.5 3h15A2.5 2.5 0 0 1 22 5.5v13a2.5 2.5 0 0 1-2.5 2.5h-15A2.5 2.5 0 0 1 2 18.5v-13zm2.6-.5L12 11.4 19.4 5H4.6zM20 6.9l-7.4 6.4a1 1 0 0 1-1.2 0L4 6.9V18.5c0 .3.2.5.5.5h15c.3 0 .5-.2.5-.5V6.9z" />
+        </svg>
+      </a>
+    </div>
+  );
+}
 
 function BrandMark() {
   return (
@@ -97,15 +156,17 @@ function App() {
         </Link>
         <nav>
           <NavLink to="/" end>
-            Board
+            Market
           </NavLink>
           <NavLink to="/launch">Launchpad</NavLink>
           <NavLink to="/creators">Creators</NavLink>
+          <NavLink to="/whitepaper">Whitepaper</NavLink>
         </nav>
         <span className="net-pill">
           <span className="net-dot" />
           Hedera {ACTIVE_NETWORK === "mainnet" ? "Mainnet" : "Testnet"}
         </span>
+        <ThemeToggle />
         <ConnectButton />
       </header>
 
@@ -115,6 +176,7 @@ function App() {
           <Route path="/launch" element={<Launch />} />
           <Route path="/t/:id" element={<Token />} />
           <Route path="/creators" element={<Creators />} />
+          <Route path="/whitepaper" element={<Whitepaper />} />
         </Routes>
       </main>
 
@@ -132,18 +194,25 @@ function App() {
               network-enforced royalty on every transfer — fast, gas-light,
               impossible to rug.
             </span>
+            <SocialLinks />
           </div>
           <div>
             <h3>Protocol</h3>
             <ul>
               <li>
-                <Link to="/">Board</Link>
+                <Link to="/">Market</Link>
               </li>
               <li>
                 <Link to="/launch">Launchpad</Link>
               </li>
               <li>
                 <Link to="/creators">Creators</Link>
+              </li>
+              <li>
+                <Link to="/whitepaper">Whitepaper</Link>
+              </li>
+              <li>
+                <a href={`mailto:${CONTACT_EMAIL}`}>Contact us</a>
               </li>
             </ul>
           </div>

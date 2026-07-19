@@ -8,6 +8,9 @@ import { BrowserRouter } from "react-router-dom";
 import "./index.css";
 import App from "./App.tsx";
 import { WalletProvider } from "./lib/wallet";
+import { initTheme } from "./lib/theme";
+
+initTheme();
 
 declare global {
   interface Window {

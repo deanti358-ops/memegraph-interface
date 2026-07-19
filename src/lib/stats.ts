@@ -1,7 +1,7 @@
 import { Interface } from "ethers";
 import { POOL_ABI } from "../abi";
 import { network } from "../config";
-import { factoryRead, fetchMemes, type MemeInfo } from "./memegraph";
+import { factoryRead, fetchMemes, poolRead, type MemeInfo } from "./memegraph";
 
 /**
  * Dashboard statistics, assembled from two sources:
@@ -20,6 +20,9 @@ export type TokenStats = MemeInfo & {
   pendingDistribution: bigint;
   trades: number;
   volumeTinybar: bigint; // HBAR traded through the pool
+  price: bigint; // getPrice() 1e18 fixed point
+  hbarReserve: bigint; // pool liquidity, tinybars
+  changePct: number | null; // price change since launch (vs seed price)
 };
 
 export type NetworkStats = {
@@ -71,13 +74,21 @@ export async function fetchNetworkStats(): Promise<NetworkStats> {
   const memes = await fetchMemes();
   const factory = factoryRead();
 
+  // Seed price is the same for every launch: poolSeed HBAR vs full supply.
+  const poolSeed: bigint = await factory.poolSeed().catch(() => 500_000_000n);
+  const seedPrice = Number(poolSeed) / 1e8 / 1_000_000_000;
+
   const tokens: TokenStats[] = await Promise.all(
     memes.map(async (m) => {
-      const [vesting, pending, trade] = await Promise.all([
+      const pool = poolRead(m.pool);
+      const [vesting, pending, trade, price, reserves] = await Promise.all([
         factory.creatorVesting(m.token),
         factory.pendingRoyalties(m.token).catch(() => 0n),
         poolTradeStats(m.pool).catch(() => ({ trades: 0, volumeTinybar: 0n })),
+        pool.getPrice().catch(() => 0n),
+        pool.getReserves().catch(() => [0n, 0n]),
       ]);
+      const priceNow = Number(price) / 1e18;
       return {
         ...m,
         creatorAccrued: vesting.accrued,
@@ -85,6 +96,12 @@ export async function fetchNetworkStats(): Promise<NetworkStats> {
         pendingDistribution: pending,
         trades: trade.trades,
         volumeTinybar: trade.volumeTinybar,
+        price,
+        hbarReserve: reserves[0],
+        changePct:
+          priceNow > 0 && seedPrice > 0
+            ? (priceNow / seedPrice - 1) * 100
+            : null,
       };
     })
   );

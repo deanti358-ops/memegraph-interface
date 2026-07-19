@@ -34,6 +34,16 @@ export const DEFAULT_SLIPPAGE_BPS = 300;
 /** HCS topic holding meme provenance claims (see api/claim.ts). */
 export const CLAIMS_TOPIC_ID = "0.0.9638085";
 
+/** Where the Contact links point. */
+export const CONTACT_EMAIL = "deanti358@gmail.com";
+
+/** Social profiles (placeholders until the real accounts exist). */
+export const SOCIALS = {
+  x: "https://x.com/memegraph",
+  github: "https://github.com/deanti358-ops",
+  discord: "https://discord.gg/memegraph",
+} as const;
+
 /** WalletConnect Cloud project id (public — ships in the bundle either way). */
 export const WALLETCONNECT_PROJECT_ID =
   import.meta.env.VITE_WALLETCONNECT_PROJECT_ID ??

@@ -30,12 +30,56 @@ type Details = MemeInfo & {
   vestClaimable: bigint;
 };
 
+/** Range presets — window on trailing time, All shows everything. */
+const TIMEFRAMES: { label: string; seconds: number | null }[] = [
+  { label: "1m", seconds: 60 },
+  { label: "2m", seconds: 120 },
+  { label: "5m", seconds: 300 },
+  { label: "10m", seconds: 600 },
+  { label: "20m", seconds: 1200 },
+  { label: "1h", seconds: 3600 },
+  { label: "All", seconds: null },
+];
+
+/** Filters points to the trailing window, carrying in the entry price so the
+    line starts at the left edge instead of appearing mid-chart. */
+function ChartWindow({
+  points,
+  windowSec,
+  symbol,
+}: {
+  points: PricePoint[];
+  windowSec: number | null;
+  symbol: string;
+}) {
+  const now = Math.floor(Date.now() / 1000);
+  let visible = points;
+  if (windowSec !== null) {
+    const from = now - windowSec;
+    const inside = points.filter((p) => p.t >= from);
+    const before = points.filter((p) => p.t < from);
+    const carryIn = before.length
+      ? [{ ...before[before.length - 1], t: from }]
+      : [];
+    visible = [...carryIn, ...inside];
+  }
+  if (visible.length < 2) {
+    return (
+      <div className="muted small">
+        No trades in this window — pick a longer timeframe.
+      </div>
+    );
+  }
+  return <PriceChart points={visible} symbol={symbol} />;
+}
+
 export default function Token() {
   const { id } = useParams();
   const { adapter, evmAddress, displayAccount } = useWallet();
 
   const [d, setD] = useState<Details | null>(null);
   const [history, setHistory] = useState<PricePoint[] | null>(null);
+  const [timeframe, setTimeframe] = useState<number | null>(null); // seconds
   const [balance, setBalance] = useState<bigint | null>(null);
   const [tab, setTab] = useState<"buy" | "sell">("buy");
   const [amount, setAmount] = useState("");
@@ -224,10 +268,25 @@ export default function Token() {
 
       <section className="panel chart-panel">
         <h2>Price · ℏ per {d.symbol ?? "token"}</h2>
+        <div className="tf-row" role="group" aria-label="Chart timeframe">
+          {TIMEFRAMES.map((tf) => (
+            <button
+              key={tf.label}
+              className={timeframe === tf.seconds ? "tf-btn active" : "tf-btn"}
+              onClick={() => setTimeframe(tf.seconds)}
+            >
+              {tf.label}
+            </button>
+          ))}
+        </div>
         {history === null ? (
           <div className="muted small">Loading trade history…</div>
         ) : (
-          <PriceChart points={history} symbol={d.symbol ?? "token"} />
+          <ChartWindow
+            points={history}
+            windowSec={timeframe}
+            symbol={d.symbol ?? "token"}
+          />
         )}
       </section>
 
