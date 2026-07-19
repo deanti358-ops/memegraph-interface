@@ -1,12 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { parseEther } from "ethers";
 import { useWallet } from "../lib/wallet";
-import { factoryWrite, hashscanTx } from "../lib/memegraph";
+import { factoryRead } from "../lib/memegraph";
 import { LAUNCH_VALUE_HBAR } from "../config";
 
 export default function Launch() {
-  const { account, connect, getSigner } = useWallet();
+  const { adapter, displayAccount } = useWallet();
   const nav = useNavigate();
 
   const [name, setName] = useState("");
@@ -19,37 +18,23 @@ export default function Launch() {
   async function onLaunch(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!account) {
-      await connect();
+    if (!adapter) {
+      setError("Connect a wallet first (top right).");
       return;
     }
     setBusy(true);
     try {
-      const signer = await getSigner();
-      const factory = factoryWrite(signer);
-      setStatus("Confirm the transaction in your wallet…");
-      const tx = await factory.launchMeme(name.trim(), symbol.trim().toUpperCase(), memo.trim(), {
-        value: parseEther(LAUNCH_VALUE_HBAR),
-        gasLimit: 4_000_000,
-      });
-      setStatus("Launching on Hedera…");
-      const rc = await tx.wait();
-
-      // Find the meme id from the MemeLaunched event
-      let memeId: string | null = null;
-      for (const log of rc.logs) {
-        try {
-          const parsed = factory.interface.parseLog(log);
-          if (parsed?.name === "MemeLaunched") {
-            memeId = parsed.args.memeId.toString();
-            break;
-          }
-        } catch {
-          /* other contract's log */
-        }
-      }
-      setStatus(`Launched! tx ${hashscanTx(rc.hash)}`);
-      nav(memeId ? `/t/${memeId}` : "/");
+      await adapter.launchMeme(
+        name.trim(),
+        symbol.trim().toUpperCase(),
+        memo.trim(),
+        LAUNCH_VALUE_HBAR,
+        setStatus
+      );
+      // Latest meme is ours (single-launcher race is acceptable on testnet)
+      const memeId = await factoryRead().memeCount();
+      setStatus("Launched!");
+      nav(`/t/${memeId}`);
     } catch (e) {
       const err = e as { shortMessage?: string; message?: string };
       setError(err.shortMessage || err.message || String(e));
@@ -112,7 +97,11 @@ export default function Launch() {
         </div>
 
         <button className="btn btn-primary" disabled={busy}>
-          {busy ? "Launching…" : account ? "Launch" : "Connect wallet to launch"}
+          {busy
+            ? "Launching…"
+            : displayAccount
+            ? "Launch"
+            : "Connect wallet to launch"}
         </button>
 
         {status && <div className="status">{status}</div>}

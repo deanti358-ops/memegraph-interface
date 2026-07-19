@@ -1,19 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { parseEther, parseUnits, MaxUint256 } from "ethers";
+import { parseUnits } from "ethers";
 import { useWallet } from "../lib/wallet";
 import {
   factoryRead,
-  factoryWrite,
   fmtHbar,
   fmtPrice,
   fmtTokens,
   hashscanAddr,
   poolRead,
-  poolWrite,
   shortAddr,
   tokenRead,
-  tokenWrite,
   mirrorToken,
   HBAR_DECIMALS,
   TOKEN_DECIMALS,
@@ -30,7 +27,7 @@ type Details = MemeInfo & {
 
 export default function Token() {
   const { id } = useParams();
-  const { account, connect, getSigner } = useWallet();
+  const { adapter, evmAddress, displayAccount } = useWallet();
 
   const [d, setD] = useState<Details | null>(null);
   const [balance, setBalance] = useState<bigint | null>(null);
@@ -67,10 +64,12 @@ export default function Token() {
       name: info?.name,
       symbol: info?.symbol,
     });
-    if (account) {
-      setBalance(await tokenRead(m.token).balanceOf(account));
+    if (evmAddress) {
+      setBalance(await tokenRead(m.token).balanceOf(evmAddress));
+    } else {
+      setBalance(null);
     }
-  }, [id, account]);
+  }, [id, evmAddress]);
 
   useEffect(() => {
     refresh().catch((e) => setError(String(e)));
@@ -101,40 +100,26 @@ export default function Token() {
   async function onTrade() {
     if (!d) return;
     setError(null);
-    if (!account) {
-      await connect();
+    if (!adapter || !evmAddress) {
+      setError("Connect a wallet first (top right).");
       return;
     }
     if (!amount || Number(amount) <= 0 || quote === null) return;
     setBusy(true);
     try {
-      const signer = await getSigner();
-      const pool = poolWrite(d.pool, signer);
       const minOut = (quote * BigInt(10_000 - DEFAULT_SLIPPAGE_BPS)) / 10_000n;
-
       if (tab === "buy") {
-        setStatus("Confirm the buy in your wallet…");
-        const tx = await pool.buy(minOut, {
-          value: parseEther(amount),
-          gasLimit: 1_500_000,
-        });
-        setStatus("Buying…");
-        await tx.wait();
+        await adapter.buy(d.pool, amount, minOut, setStatus);
       } else {
         const units = parseUnits(amount, TOKEN_DECIMALS);
-        const token = tokenWrite(d.token, signer);
-        const allowance: bigint = await token.allowance(account, d.pool);
-        if (allowance < units) {
-          setStatus("Approve the pool to spend your tokens…");
-          const atx = await token.approve(d.pool, MaxUint256, {
-            gasLimit: 1_000_000,
-          });
-          await atx.wait();
-        }
-        setStatus("Confirm the sell in your wallet…");
-        const tx = await pool.sell(units, minOut, { gasLimit: 1_500_000 });
-        setStatus("Selling…");
-        await tx.wait();
+        await adapter.sellWithApproval(
+          d.token,
+          d.pool,
+          units,
+          minOut,
+          evmAddress,
+          setStatus
+        );
       }
       setStatus("Done.");
       setAmount("");
@@ -151,19 +136,13 @@ export default function Token() {
   async function onDistribute() {
     if (!d) return;
     setError(null);
-    if (!account) {
-      await connect();
+    if (!adapter) {
+      setError("Connect a wallet first (top right).");
       return;
     }
     setBusy(true);
     try {
-      const signer = await getSigner();
-      setStatus("Confirm the distribution in your wallet…");
-      const tx = await factoryWrite(signer).distributeRoyalties(d.token, {
-        gasLimit: 1_500_000,
-      });
-      setStatus("Distributing royalties…");
-      await tx.wait();
+      await adapter.distribute(d.token, setStatus);
       setStatus("Royalties paid out.");
       await refresh();
     } catch (e) {
@@ -263,7 +242,7 @@ export default function Token() {
           <button className="btn btn-primary wide" onClick={onTrade} disabled={busy}>
             {busy
               ? "Working…"
-              : !account
+              : !displayAccount
               ? "Connect wallet"
               : tab === "buy"
               ? "Buy"

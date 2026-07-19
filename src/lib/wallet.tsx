@@ -4,11 +4,14 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
   type ReactNode,
 } from "react";
 import { BrowserProvider, JsonRpcProvider, type Signer } from "ethers";
 import { network } from "../config";
+import { EthersAdapter, HashPackAdapter, type TxAdapter } from "./tx";
+import { getHashConnect, initHashConnect, accountEvmAddress } from "./hashpack";
 
 type Eip1193 = {
   request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
@@ -27,46 +30,88 @@ export const readProvider = new JsonRpcProvider(network.rpcUrl, network.chainId,
   batchMaxCount: 1, // Hashio doesn't accept JSON-RPC batches
 });
 
+export type WalletKind = "metamask" | "hashpack";
+
 type WalletState = {
-  account: string | null;
+  kind: WalletKind | null;
+  /** EVM address — used for balance/allowance reads for both wallet kinds */
+  evmAddress: string | null;
+  /** What to show in the connect button: 0.0.x for HashPack, 0x… for EVM */
+  displayAccount: string | null;
   connecting: boolean;
-  connect: () => Promise<void>;
-  getSigner: () => Promise<Signer>;
-  hasWallet: boolean;
+  hasMetaMask: boolean;
+  connectMetaMask: () => Promise<void>;
+  connectHashPack: () => Promise<void>;
+  disconnect: () => void;
+  adapter: TxAdapter | null;
 };
 
 const WalletCtx = createContext<WalletState | null>(null);
 
-export function WalletProvider({ children }: { children: ReactNode }) {
-  const [account, setAccount] = useState<string | null>(null);
-  const [connecting, setConnecting] = useState(false);
-  const hasWallet = typeof window !== "undefined" && !!window.ethereum;
+async function ensureChain(eth: Eip1193) {
+  const chainId = (await eth.request({ method: "eth_chainId" })) as string;
+  if (parseInt(chainId, 16) === network.chainId) return;
+  try {
+    await eth.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: network.chainIdHex }],
+    });
+  } catch {
+    await eth.request({
+      method: "wallet_addEthereumChain",
+      params: [
+        {
+          chainId: network.chainIdHex,
+          chainName: network.chainName,
+          nativeCurrency: { name: "HBAR", symbol: "HBAR", decimals: 18 },
+          rpcUrls: [network.rpcUrl],
+          blockExplorerUrls: [network.hashscanUrl],
+        },
+      ],
+    });
+  }
+}
 
-  const ensureChain = useCallback(async (eth: Eip1193) => {
-    const chainId = (await eth.request({ method: "eth_chainId" })) as string;
-    if (parseInt(chainId, 16) === network.chainId) return;
+async function evmSigner(): Promise<Signer> {
+  if (!window.ethereum) throw new Error("No EVM wallet installed");
+  await ensureChain(window.ethereum);
+  const provider = new BrowserProvider(window.ethereum);
+  return provider.getSigner();
+}
+
+export function WalletProvider({ children }: { children: ReactNode }) {
+  const [kind, setKind] = useState<WalletKind | null>(null);
+  const [evmAddress, setEvmAddress] = useState<string | null>(null);
+  const [displayAccount, setDisplayAccount] = useState<string | null>(null);
+  const [hederaAccountId, setHederaAccountId] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(false);
+  const hasMetaMask = typeof window !== "undefined" && !!window.ethereum;
+
+  const applyHashPackSession = useCallback(async (accountIds: string[]) => {
+    const accountId = accountIds[0];
+    if (!accountId) return;
+    setKind("hashpack");
+    setHederaAccountId(accountId);
+    setDisplayAccount(accountId);
     try {
-      await eth.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: network.chainIdHex }],
-      });
+      setEvmAddress(await accountEvmAddress(accountId));
     } catch {
-      await eth.request({
-        method: "wallet_addEthereumChain",
-        params: [
-          {
-            chainId: network.chainIdHex,
-            chainName: network.chainName,
-            nativeCurrency: { name: "HBAR", symbol: "HBAR", decimals: 18 },
-            rpcUrls: [network.rpcUrl],
-            blockExplorerUrls: [network.hashscanUrl],
-          },
-        ],
-      });
+      setEvmAddress(null);
     }
   }, []);
 
-  const connect = useCallback(async () => {
+  // Restore an existing HashPack pairing on load.
+  useEffect(() => {
+    initHashConnect(
+      (session) => applyHashPackSession(session.accountIds),
+      () => {
+        setKind((k) => (k === "hashpack" ? null : k));
+        setHederaAccountId(null);
+      }
+    ).catch(() => {});
+  }, [applyHashPackSession]);
+
+  const connectMetaMask = useCallback(async () => {
     if (!window.ethereum) {
       window.open("https://metamask.io/download/", "_blank");
       return;
@@ -77,33 +122,82 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const accounts = (await window.ethereum.request({
         method: "eth_requestAccounts",
       })) as string[];
-      setAccount(accounts[0] ?? null);
+      if (accounts[0]) {
+        setKind("metamask");
+        setEvmAddress(accounts[0]);
+        setDisplayAccount(accounts[0]);
+        setHederaAccountId(null);
+      }
     } finally {
       setConnecting(false);
     }
-  }, [ensureChain]);
+  }, []);
 
-  const getSigner = useCallback(async (): Promise<Signer> => {
-    if (!window.ethereum) throw new Error("No wallet installed");
-    await ensureChain(window.ethereum);
-    const provider = new BrowserProvider(window.ethereum);
-    return provider.getSigner();
-  }, [ensureChain]);
+  const connectHashPack = useCallback(async () => {
+    setConnecting(true);
+    try {
+      await initHashConnect(
+        (session) => applyHashPackSession(session.accountIds),
+        () => {
+          setKind((k) => (k === "hashpack" ? null : k));
+          setHederaAccountId(null);
+        }
+      );
+      getHashConnect().openPairingModal();
+    } finally {
+      setConnecting(false);
+    }
+  }, [applyHashPackSession]);
 
+  const disconnect = useCallback(() => {
+    if (kind === "hashpack") {
+      getHashConnect()
+        .disconnect()
+        .catch(() => {});
+    }
+    setKind(null);
+    setEvmAddress(null);
+    setDisplayAccount(null);
+    setHederaAccountId(null);
+  }, [kind]);
+
+  // MetaMask account switches
   useEffect(() => {
     const eth = window.ethereum;
     if (!eth?.on) return;
     const onAccounts = (...args: unknown[]) => {
       const accounts = args[0] as string[];
-      setAccount(accounts[0] ?? null);
+      setKind((k) => {
+        if (k !== "metamask") return k;
+        setEvmAddress(accounts[0] ?? null);
+        setDisplayAccount(accounts[0] ?? null);
+        return accounts[0] ? k : null;
+      });
     };
     eth.on("accountsChanged", onAccounts);
     return () => eth.removeListener?.("accountsChanged", onAccounts);
   }, []);
 
+  const adapter = useMemo<TxAdapter | null>(() => {
+    if (kind === "metamask") return new EthersAdapter(evmSigner);
+    if (kind === "hashpack" && hederaAccountId)
+      return new HashPackAdapter(hederaAccountId);
+    return null;
+  }, [kind, hederaAccountId]);
+
   return (
     <WalletCtx.Provider
-      value={{ account, connecting, connect, getSigner, hasWallet }}
+      value={{
+        kind,
+        evmAddress,
+        displayAccount,
+        connecting,
+        hasMetaMask,
+        connectMetaMask,
+        connectHashPack,
+        disconnect,
+        adapter,
+      }}
     >
       {children}
     </WalletCtx.Provider>

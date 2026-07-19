@@ -10,7 +10,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@hashgraph/sdk": "^2.41.0",
+    "bignumber.js": "^9.1.1",
+    "buffer": "^6.0.3",
     "ethers": "^6.17.0",
+    "hashconnect": "^3.0.14",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-router-dom": "^7.18.1"

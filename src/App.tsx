@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, NavLink, Route, Routes } from "react-router-dom";
 import { useWallet } from "./lib/wallet";
 import { shortAddr } from "./lib/memegraph";
@@ -6,9 +7,69 @@ import Launch from "./pages/Launch";
 import Token from "./pages/Token";
 import Creators from "./pages/Creators";
 
-function App() {
-  const { account, connect, connecting } = useWallet();
+function ConnectButton() {
+  const {
+    displayAccount,
+    kind,
+    connecting,
+    connectMetaMask,
+    connectHashPack,
+    disconnect,
+  } = useWallet();
+  const [open, setOpen] = useState(false);
 
+  if (displayAccount) {
+    return (
+      <button
+        className="btn btn-connect"
+        onClick={disconnect}
+        title={`Connected via ${kind === "hashpack" ? "HashPack" : "MetaMask"} — click to disconnect`}
+      >
+        {displayAccount.startsWith("0x")
+          ? shortAddr(displayAccount)
+          : displayAccount}
+      </button>
+    );
+  }
+
+  return (
+    <div className="connect-wrap">
+      <button
+        className="btn btn-connect"
+        onClick={() => setOpen((o) => !o)}
+        disabled={connecting}
+      >
+        {connecting ? "Connecting…" : "Connect wallet"}
+      </button>
+      {open && (
+        <div className="connect-menu" onMouseLeave={() => setOpen(false)}>
+          <button
+            className="connect-option"
+            onClick={() => {
+              setOpen(false);
+              connectHashPack();
+            }}
+          >
+            <strong>HashPack</strong>
+            <span className="muted small">Hedera-native · pairing modal</span>
+          </button>
+          <button
+            className="connect-option"
+            onClick={() => {
+              setOpen(false);
+              connectMetaMask();
+            }}
+          >
+            <strong>MetaMask</strong>
+            <span className="muted small">EVM · adds Hedera testnet</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function App() {
   return (
     <div className="shell">
       <header className="topbar">
@@ -22,9 +83,7 @@ function App() {
           <NavLink to="/launch">Launch</NavLink>
           <NavLink to="/creators">Creators</NavLink>
         </nav>
-        <button className="btn btn-connect" onClick={connect} disabled={connecting}>
-          {account ? shortAddr(account) : connecting ? "Connecting…" : "Connect wallet"}
-        </button>
+        <ConnectButton />
       </header>
 
       <main>
