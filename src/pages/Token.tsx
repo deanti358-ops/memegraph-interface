@@ -23,6 +23,9 @@ type Details = MemeInfo & {
   hbarReserve: bigint;
   tokenReserve: bigint;
   pending: bigint;
+  vestAccrued: bigint;
+  vestClaimed: bigint;
+  vestClaimable: bigint;
 };
 
 export default function Token() {
@@ -44,12 +47,15 @@ export default function Token() {
     const factory = factoryRead();
     const m = await factory.getMeme(memeId);
     const pool = poolRead(m.pool);
-    const [price, reserves, pending, info] = await Promise.all([
-      pool.getPrice(),
-      pool.getReserves(),
-      factory.pendingRoyalties(m.token),
-      mirrorToken(m.token).catch(() => undefined),
-    ]);
+    const [price, reserves, pending, vesting, claimable, info] =
+      await Promise.all([
+        pool.getPrice(),
+        pool.getReserves(),
+        factory.pendingRoyalties(m.token),
+        factory.creatorVesting(m.token),
+        factory.claimableCreatorRoyalties(m.token),
+        mirrorToken(m.token).catch(() => undefined),
+      ]);
     setD({
       id: memeId,
       token: m.token,
@@ -61,6 +67,9 @@ export default function Token() {
       hbarReserve: reserves[0],
       tokenReserve: reserves[1],
       pending,
+      vestAccrued: vesting.accrued,
+      vestClaimed: vesting.claimed,
+      vestClaimable: claimable,
       name: info?.name,
       symbol: info?.symbol,
     });
@@ -143,7 +152,28 @@ export default function Token() {
     setBusy(true);
     try {
       await adapter.distribute(d.token, setStatus);
-      setStatus("Royalties paid out.");
+      setStatus("Royalties distributed.");
+      await refresh();
+    } catch (e) {
+      const err = e as { shortMessage?: string; message?: string };
+      setError(err.shortMessage || err.message || String(e));
+      setStatus(null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onClaimCreator() {
+    if (!d) return;
+    setError(null);
+    if (!adapter) {
+      setError("Connect a wallet first (top right).");
+      return;
+    }
+    setBusy(true);
+    try {
+      await adapter.claimCreator(d.token, setStatus);
+      setStatus("Vested royalties sent to the creator.");
       await refresh();
     } catch (e) {
       const err = e as { shortMessage?: string; message?: string };
@@ -284,9 +314,16 @@ export default function Token() {
               <dd>{new Date(d.launchedAt * 1000).toLocaleString()}</dd>
             </div>
             <div>
-              <dt>Pending royalties</dt>
+              <dt>Undistributed royalties</dt>
               <dd>
                 {fmtTokens(d.pending)} {d.symbol}
+              </dd>
+            </div>
+            <div>
+              <dt>Creator vesting</dt>
+              <dd>
+                {fmtTokens(d.vestAccrued - d.vestClaimed)} {d.symbol} locked ·{" "}
+                {fmtTokens(d.vestClaimable)} claimable
               </dd>
             </div>
           </dl>
@@ -295,16 +332,25 @@ export default function Token() {
             className="btn wide"
             onClick={onDistribute}
             disabled={busy || d.pending === 0n}
-            title="Anyone can trigger a payout — 40% creator, 40% protocol, 20% pool"
+            title="Anyone can trigger — protocol and pool pay out now, the creator share starts vesting"
           >
             Distribute royalties
+          </button>
+          <button
+            className="btn wide"
+            onClick={onClaimCreator}
+            disabled={busy || d.vestClaimable === 0n}
+            title="Anyone can trigger — pays the creator everything vested so far"
+          >
+            Pay creator vested royalties
           </button>
 
           <p className="muted small">
             1% of every transfer is collected by the network itself. Payouts
-            split 0.4% creator / 0.4% protocol / 0.2% pool. The token has no
-            admin, supply, pause, or fee keys — nothing about it can ever be
-            changed.
+            split 0.4% creator / 0.4% protocol / 0.2% pool; the creator share
+            vests linearly over 90 days from launch, so dumping early forfeits
+            the upside. The token has no admin, supply, pause, or fee keys —
+            nothing about it can ever be changed.
           </p>
         </section>
       </div>

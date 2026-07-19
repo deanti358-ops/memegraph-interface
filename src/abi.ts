@@ -8,8 +8,14 @@ export const FACTORY_ABI = [
   "function poolSeed() view returns (uint256)",
   "function creationFee() view returns (uint256)",
   "function protocolTreasury() view returns (address)",
+  "function vestingDuration() view returns (uint64)",
+  "function creatorVesting(address token) view returns (uint256 accrued, uint256 claimed)",
+  "function vestedCreatorRoyalties(address token) view returns (uint256)",
+  "function claimableCreatorRoyalties(address token) view returns (uint256)",
+  "function claimCreatorRoyalties(address token)",
   "event MemeLaunched(uint256 indexed memeId, address indexed token, address indexed creator, address pool, string memeMemo)",
-  "event RoyaltiesDistributed(address indexed token, uint256 creatorAmount, uint256 protocolAmount, uint256 poolAmount)",
+  "event RoyaltiesDistributed(address indexed token, uint256 creatorAccrued, uint256 protocolAmount, uint256 poolAmount)",
+  "event CreatorRoyaltiesClaimed(address indexed token, address indexed creator, uint256 amount)",
 ];
 
 export const POOL_ABI = [

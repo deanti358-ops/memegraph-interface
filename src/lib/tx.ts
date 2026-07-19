@@ -53,6 +53,7 @@ export interface TxAdapter {
     onStep: (msg: string) => void
   ): Promise<void>;
   distribute(token: string, onStep: (msg: string) => void): Promise<void>;
+  claimCreator(token: string, onStep: (msg: string) => void): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -159,6 +160,16 @@ export class EthersAdapter implements TxAdapter {
       gasLimit: 1_500_000,
     });
     onStep("Distributing royalties…");
+    await tx.wait();
+  }
+
+  async claimCreator(token: string, onStep: (msg: string) => void) {
+    const factory = factoryWrite(await this.getSigner());
+    onStep("Confirm the claim in your wallet…");
+    const tx = await factory.claimCreatorRoyalties(token, {
+      gasLimit: 1_500_000,
+    });
+    onStep("Claiming vested royalties…");
     await tx.wait();
   }
 }
@@ -324,6 +335,22 @@ export class HashPackAdapter implements TxAdapter {
       onStep,
       "Approve the distribution in HashPack…",
       "Distributing royalties…"
+    );
+  }
+
+  async claimCreator(token: string, onStep: (msg: string) => void) {
+    const tx = new ContractExecuteTransaction()
+      .setContractId(contractId(network.factoryAddress))
+      .setGas(1_500_000)
+      .setFunction(
+        "claimCreatorRoyalties",
+        new ContractFunctionParameters().addAddress(addr(token))
+      );
+    await this.exec(
+      tx,
+      onStep,
+      "Approve the claim in HashPack…",
+      "Claiming vested royalties…"
     );
   }
 }

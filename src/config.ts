@@ -8,7 +8,7 @@ export const NETWORKS = {
     rpcUrl: "https://testnet.hashio.io/api",
     mirrorNodeUrl: "https://testnet.mirrornode.hedera.com/api/v1",
     hashscanUrl: "https://hashscan.io/testnet",
-    factoryAddress: "0xe0A82816EdD2dc0af8892dA44B737E8e945b9DD5",
+    factoryAddress: "0xeB14C2953f2D84b010aFAeA3bcFF7702003BED52",
   },
   mainnet: {
     chainId: 295,
