@@ -1,15 +1,25 @@
-import { parseEther, MaxUint256, type Signer } from "ethers";
+import { Contract, parseEther, MaxUint256, type Signer } from "ethers";
 import {
   AccountId,
   ContractExecuteTransaction,
   ContractFunctionParameters,
   ContractId,
   Hbar,
+  TokenAssociateTransaction,
+  TokenId,
   type Signer as HederaSigner,
 } from "@hashgraph/sdk";
 import BigNumber from "bignumber.js";
 import { network } from "../config";
-import { factoryWrite, poolWrite, tokenWrite, tokenRead } from "./memegraph";
+import {
+  factoryRead,
+  factoryWrite,
+  poolWrite,
+  tokenWrite,
+  tokenRead,
+  isAssociated,
+  tokenEntityId,
+} from "./memegraph";
 import { getHashConnect } from "./hashpack";
 
 /**
@@ -28,6 +38,7 @@ export interface TxAdapter {
     onStep: (msg: string) => void
   ): Promise<void>;
   buy(
+    token: string,
     pool: string,
     hbarAmount: string,
     minTokensOut: bigint,
@@ -55,6 +66,24 @@ export class EthersAdapter implements TxAdapter {
     this.getSigner = getSigner;
   }
 
+  /**
+   * Hedera accounts can't receive an HTS token they aren't associated with —
+   * a pool buy would revert mid-transfer. EVM wallets associate through the
+   * token's HIP-719 facade.
+   */
+  private async ensureAssociated(
+    token: string,
+    onStep: (msg: string) => void
+  ) {
+    const signer = await this.getSigner();
+    const owner = await signer.getAddress();
+    if (await isAssociated(owner, token)) return;
+    onStep("One-time setup: confirm the token association in your wallet…");
+    const facade = new Contract(token, ["function associate()"], signer);
+    const tx = await facade.associate({ gasLimit: 1_000_000 });
+    await tx.wait();
+  }
+
   async launchMeme(
     name: string,
     symbol: string,
@@ -70,14 +99,24 @@ export class EthersAdapter implements TxAdapter {
     });
     onStep("Launching on Hedera…");
     await tx.wait();
+    // Associate the creator with their token now, so royalty payouts and
+    // curve buys can't revert on an unassociated account later.
+    try {
+      const meme = await factoryRead().getMeme(await factoryRead().memeCount());
+      await this.ensureAssociated(meme.token, onStep);
+    } catch {
+      /* payouts will surface this later; not fatal to the launch */
+    }
   }
 
   async buy(
+    token: string,
     pool: string,
     hbarAmount: string,
     minTokensOut: bigint,
     onStep: (msg: string) => void
   ) {
+    await this.ensureAssociated(token, onStep);
     const p = poolWrite(pool, await this.getSigner());
     onStep("Confirm the buy in your wallet…");
     const tx = await p.buy(minTokensOut, {
@@ -170,6 +209,22 @@ export class HashPackAdapter implements TxAdapter {
     await resp.getReceiptWithSigner(signer);
   }
 
+  /** Associate via a native TokenAssociateTransaction if needed. */
+  private async ensureAssociated(
+    token: string,
+    onStep: (msg: string) => void
+  ) {
+    if (await isAssociated(this.accountId, token)) return;
+    onStep("One-time setup: approve the token association in HashPack…");
+    const signer = this.signer();
+    const tx = new TokenAssociateTransaction()
+      .setAccountId(AccountId.fromString(this.accountId))
+      .setTokenIds([TokenId.fromString(tokenEntityId(token))]);
+    const frozen = await tx.freezeWithSigner(signer);
+    const resp = await frozen.executeWithSigner(signer);
+    await resp.getReceiptWithSigner(signer);
+  }
+
   async launchMeme(
     name: string,
     symbol: string,
@@ -189,14 +244,24 @@ export class HashPackAdapter implements TxAdapter {
           .addString(memo)
       );
     await this.exec(tx, onStep, "Approve the launch in HashPack…", "Launching on Hedera…");
+    // Associate the creator with their token now, so royalty payouts and
+    // curve buys can't revert on an unassociated account later.
+    try {
+      const meme = await factoryRead().getMeme(await factoryRead().memeCount());
+      await this.ensureAssociated(meme.token, onStep);
+    } catch {
+      /* payouts will surface this later; not fatal to the launch */
+    }
   }
 
   async buy(
+    token: string,
     pool: string,
     hbarAmount: string,
     minTokensOut: bigint,
     onStep: (msg: string) => void
   ) {
+    await this.ensureAssociated(token, onStep);
     const tx = new ContractExecuteTransaction()
       .setContractId(contractId(pool))
       .setGas(1_500_000)

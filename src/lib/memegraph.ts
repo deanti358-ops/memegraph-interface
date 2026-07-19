@@ -112,6 +112,28 @@ export function hashscanAddr(addr: string): string {
 // Mirror node helpers
 // ---------------------------------------------------------------------------
 
+/** Token EVM long-zero address → mirror-node entity id (0.0.x). */
+export function tokenEntityId(evmAddress: string): string {
+  return `0.0.${BigInt(evmAddress)}`;
+}
+
+/**
+ * Whether `account` (0.0.x or EVM address) is associated with the token.
+ * Hedera accounts must be associated before they can receive an HTS token;
+ * transfers to unassociated accounts revert.
+ */
+export async function isAssociated(
+  account: string,
+  tokenEvm: string
+): Promise<boolean> {
+  const res = await fetch(
+    `${network.mirrorNodeUrl}/accounts/${account}/tokens?token.id=${tokenEntityId(tokenEvm)}`
+  );
+  if (!res.ok) return false;
+  const d = await res.json();
+  return (d.tokens?.length ?? 0) > 0;
+}
+
 const tokenInfoCache = new Map<string, { name: string; symbol: string }>();
 
 export async function mirrorToken(evmAddress: string) {

@@ -109,7 +109,7 @@ export default function Token() {
     try {
       const minOut = (quote * BigInt(10_000 - DEFAULT_SLIPPAGE_BPS)) / 10_000n;
       if (tab === "buy") {
-        await adapter.buy(d.pool, amount, minOut, setStatus);
+        await adapter.buy(d.token, d.pool, amount, minOut, setStatus);
       } else {
         const units = parseUnits(amount, TOKEN_DECIMALS);
         await adapter.sellWithApproval(
