@@ -22,10 +22,39 @@ export default function Launch() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** sha256 of a meme someone else already claimed — offers a challenge */
+  const [challengeable, setChallengeable] = useState<string | null>(null);
+
+  async function onChallenge(hash: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await fetch("/api/claim", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          kind: "challenge",
+          hash,
+          challenger: displayAccount ?? evmAddress ?? "anonymous",
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error ?? "challenge failed");
+      setStatus(
+        `Challenge recorded on HCS (message #${d.sequenceNumber}). Disputes are arbitrated before mainnet launches.`
+      );
+      setChallengeable(null);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function onLaunch(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setChallengeable(null);
     if (!adapter) {
       setError("Connect a wallet first (top right).");
       return;
@@ -33,38 +62,69 @@ export default function Launch() {
     setBusy(true);
     try {
       // 1. Provenance claim: hash the meme and record it on HCS. The claim
-      //    reference is baked into the token's immutable memo.
+      //    reference is baked into the token's immutable memo. First claim
+      //    wins; launching is only permitted after the challenge window.
       let memo = "";
       if (file) {
         setStatus("Hashing your meme…");
         const hash = await sha256Hex(file);
 
-        setStatus("Checking it hasn't been claimed…");
+        setStatus("Checking existing claims…");
         const check = await fetch(`/api/claim?hash=${hash}`).then((r) =>
           r.json()
         );
-        if (check.claimed) {
+        const me = (displayAccount ?? evmAddress ?? "").toLowerCase();
+        const now = Math.floor(Date.now() / 1000);
+
+        if (check.claimed && check.claim.creator?.toLowerCase() !== me) {
+          setChallengeable(hash);
           throw new Error(
-            `This meme was already claimed by ${check.claim?.creator ?? "someone else"} (claim #${check.claim?.seq}). First claim wins.`
+            `This meme was already claimed by ${check.claim?.creator ?? "someone else"} (claim #${check.claim?.seq}). First claim wins — you can file a challenge below.`
           );
         }
 
-        setStatus("Recording your claim on Hedera Consensus Service…");
-        const claimRes = await fetch("/api/claim", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            hash,
-            creator: displayAccount ?? evmAddress,
-            name: name.trim(),
-            symbol: symbol.trim().toUpperCase(),
-          }),
-        });
-        const claim = await claimRes.json();
-        if (!claimRes.ok) {
-          throw new Error(claim.error ?? "claim failed");
+        if (check.claimed) {
+          // Our own earlier claim — enforce the challenge window
+          if (now < check.claim.readyAt) {
+            const opens = new Date(
+              check.claim.readyAt * 1000
+            ).toLocaleTimeString();
+            throw new Error(
+              `Your claim is recorded (HCS #${check.claim.seq}) but the challenge window is still open. You can launch after ${opens}.`
+            );
+          }
+          if (check.claim.challenges > 0) {
+            setStatus(
+              `⚠ ${check.claim.challenges} challenge(s) on record for this meme — visible to everyone on HCS.`
+            );
+          }
+          memo = check.claim.memo;
+        } else {
+          setStatus("Recording your claim on Hedera Consensus Service…");
+          const claimRes = await fetch("/api/claim", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              hash,
+              creator: displayAccount ?? evmAddress,
+              name: name.trim(),
+              symbol: symbol.trim().toUpperCase(),
+            }),
+          });
+          const claim = await claimRes.json();
+          if (!claimRes.ok) {
+            throw new Error(claim.error ?? "claim failed");
+          }
+          if (claim.windowSec > 0) {
+            const opens = new Date(claim.readyAt * 1000).toLocaleTimeString();
+            setStatus(
+              `✓ Claim sealed on HCS (${claim.memo}). Challenge window open until ${opens} — press Launch again after that.`
+            );
+            setBusy(false);
+            return;
+          }
+          memo = claim.memo; // e.g. hcs:0.0.9638085/7
         }
-        memo = claim.memo; // e.g. hcs:0.0.9638085/7
       }
 
       // 2. Launch the token with the claim reference in its immutable memo.
@@ -149,6 +209,17 @@ export default function Launch() {
 
         {status && <div className="status">{status}</div>}
         {error && <div className="error">{error}</div>}
+        {challengeable && (
+          <button
+            type="button"
+            className="btn"
+            disabled={busy}
+            onClick={() => onChallenge(challengeable)}
+            title="Files a public, consensus-timestamped dispute on the Hedera Consensus Service"
+          >
+            File a challenge on HCS
+          </button>
+        )}
       </form>
     </div>
   );

@@ -153,9 +153,22 @@ export async function isAssociated(
   return (d.tokens?.length ?? 0) > 0;
 }
 
-const tokenInfoCache = new Map<string, { name: string; symbol: string }>();
+export type MirrorTokenInfo = {
+  name: string;
+  symbol: string;
+  /** Anti-rug facts, straight from the ledger */
+  safety: {
+    noAdminKey: boolean;
+    noFeeScheduleKey: boolean;
+    noSupplyKey: boolean;
+    noPauseOrFreeze: boolean;
+    finiteSupply: boolean;
+  };
+};
 
-export async function mirrorToken(evmAddress: string) {
+const tokenInfoCache = new Map<string, MirrorTokenInfo>();
+
+export async function mirrorToken(evmAddress: string): Promise<MirrorTokenInfo> {
   const cached = tokenInfoCache.get(evmAddress);
   if (cached) return cached;
   // Token EVM addresses on Hedera encode the entity number
@@ -163,7 +176,17 @@ export async function mirrorToken(evmAddress: string) {
   const res = await fetch(`${network.mirrorNodeUrl}/tokens/0.0.${tokenNum}`);
   if (!res.ok) throw new Error(`mirror node ${res.status}`);
   const d = await res.json();
-  const info = { name: d.name as string, symbol: d.symbol as string };
+  const info: MirrorTokenInfo = {
+    name: d.name as string,
+    symbol: d.symbol as string,
+    safety: {
+      noAdminKey: d.admin_key === null,
+      noFeeScheduleKey: d.fee_schedule_key === null,
+      noSupplyKey: d.supply_key === null,
+      noPauseOrFreeze: d.pause_key === null && d.freeze_key === null && d.wipe_key === null,
+      finiteSupply: d.supply_type === "FINITE",
+    },
+  };
   tokenInfoCache.set(evmAddress, info);
   return info;
 }

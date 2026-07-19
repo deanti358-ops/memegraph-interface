@@ -31,6 +31,7 @@ type Details = MemeInfo & {
   vestAccrued: bigint;
   vestClaimed: bigint;
   vestClaimable: bigint;
+  safety?: import("../lib/memegraph").MirrorTokenInfo["safety"];
 };
 
 /** Range presets — window on trailing time, All shows everything. */
@@ -128,6 +129,7 @@ export default function Token() {
       vestClaimable: claimable,
       name: info?.name,
       symbol: info?.symbol,
+      safety: info?.safety,
     });
     if (evmAddress) {
       setBalance(await tokenRead(m.token).balanceOf(evmAddress));
@@ -286,6 +288,22 @@ export default function Token() {
           )}
         </div>
       </div>
+
+      {d.safety && (
+        <div className="safety-row" title="Verified live from the Hedera mirror node — not self-reported">
+          {[
+            { ok: d.safety.noAdminKey, label: "No admin key" },
+            { ok: d.safety.noFeeScheduleKey, label: "Royalty immutable" },
+            { ok: d.safety.noSupplyKey && d.safety.finiteSupply, label: "Fixed supply" },
+            { ok: d.safety.noPauseOrFreeze, label: "No pause/freeze/wipe" },
+            { ok: true, label: "Permanent liquidity" },
+          ].map((b) => (
+            <span key={b.label} className={b.ok ? "safety-badge ok" : "safety-badge bad"}>
+              {b.ok ? "✓" : "✗"} {b.label}
+            </span>
+          ))}
+        </div>
+      )}
 
       <section className="panel chart-panel">
         <h2>Price · ℏ per {d.symbol ?? "token"}</h2>

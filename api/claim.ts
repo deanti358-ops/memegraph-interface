@@ -1,14 +1,17 @@
 /**
  * Memegraph claim endpoint (Vercel serverless).
  *
- * GET  /api/claim?hash=<sha256>  → { claimed, claim? }
- * POST /api/claim { hash, creator, name, symbol }
- *      → { topicId, sequenceNumber, memo } (rejects duplicate hashes)
+ * GET  /api/claim?hash=<sha256>
+ *      → { claimed, claim?: { …, seq, consensusTs, readyAt, challenges } }
+ * POST /api/claim { hash, creator, name, symbol }            — file a claim
+ * POST /api/claim { kind:"challenge", hash, challenger, reason? } — dispute one
  *
- * Claims are JSON messages on the public HCS topic — an immutable,
- * consensus-timestamped provenance record. The topic has a submit key
- * (spam control), so writes go through this function; reads are public
- * on any mirror node.
+ * Claims and challenges are JSON messages on a public HCS topic — an
+ * immutable, consensus-timestamped provenance record. First claim wins,
+ * but a token launch is only permitted after the challenge window
+ * (CHALLENGE_WINDOW_SECONDS, default 10 minutes on testnet; 24h planned
+ * for mainnet). Challenges filed during the window are surfaced to the
+ * creator and the UI; dispute arbitration is manual in the MVP.
  */
 import {
   Client,
@@ -19,17 +22,31 @@ import {
 const MIRROR = "https://testnet.mirrornode.hedera.com/api/v1";
 // .trim(): env values entered via CLI pipes can carry stray CR/LF
 const TOPIC_ID = (process.env.HCS_TOPIC_ID || "0.0.9638085").trim();
+const WINDOW_SEC = Number(process.env.CHALLENGE_WINDOW_SECONDS || 600);
 
-type Claim = {
+type Msg = {
   v: 1;
+  kind?: "claim" | "challenge"; // legacy messages without kind are claims
   hash: string;
-  creator: string;
-  name: string;
-  symbol: string;
+  creator?: string;
+  challenger?: string;
+  reason?: string;
+  name?: string;
+  symbol?: string;
   ts: string;
 };
 
-async function findClaim(hash: string): Promise<(Claim & { seq: number }) | null> {
+type FoundClaim = Msg & {
+  seq: number;
+  consensusTs: number;
+  readyAt: number;
+  challenges: number;
+  memo: string;
+};
+
+async function scanTopic(hash: string): Promise<FoundClaim | null> {
+  let claim: FoundClaim | null = null;
+  let challenges = 0;
   let url = `${MIRROR}/topics/${TOPIC_ID}/messages?limit=100&order=asc`;
   while (url) {
     const res = await fetch(url);
@@ -37,11 +54,25 @@ async function findClaim(hash: string): Promise<(Claim & { seq: number }) | null
     const d = await res.json();
     for (const m of d.messages ?? []) {
       try {
-        const claim = JSON.parse(
+        const msg = JSON.parse(
           Buffer.from(m.message, "base64").toString("utf8")
-        ) as Claim;
-        if (claim.hash === hash) {
-          return { ...claim, seq: m.sequence_number };
+        ) as Msg;
+        if (msg.hash !== hash) continue;
+        const isChallenge = msg.kind === "challenge";
+        if (isChallenge) {
+          challenges++;
+        } else if (!claim) {
+          const consensusTs = Number(
+            String(m.consensus_timestamp).split(".")[0]
+          );
+          claim = {
+            ...msg,
+            seq: m.sequence_number,
+            consensusTs,
+            readyAt: consensusTs + WINDOW_SEC,
+            challenges: 0,
+            memo: `hcs:${TOPIC_ID}/${m.sequence_number}`,
+          };
         }
       } catch {
         /* non-JSON message; skip */
@@ -49,7 +80,26 @@ async function findClaim(hash: string): Promise<(Claim & { seq: number }) | null
     }
     url = d.links?.next ? `${MIRROR.replace("/api/v1", "")}${d.links.next}` : "";
   }
-  return null;
+  if (claim) claim.challenges = challenges;
+  return claim;
+}
+
+async function submitMessage(payload: Msg): Promise<number> {
+  const operatorId = (process.env.HCS_OPERATOR_ID || "").trim();
+  const operatorKey = PrivateKey.fromStringECDSA(
+    (process.env.HCS_OPERATOR_KEY || "").trim()
+  );
+  const client = Client.forTestnet().setOperator(operatorId, operatorKey);
+  try {
+    const tx = await new TopicMessageSubmitTransaction()
+      .setTopicId(TOPIC_ID)
+      .setMessage(JSON.stringify(payload))
+      .execute(client);
+    const receipt = await tx.getReceipt(client);
+    return receipt.topicSequenceNumber?.toNumber() ?? 0;
+  } finally {
+    client.close();
+  }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -60,56 +110,66 @@ export default async function handler(req: any, res: any) {
       if (!/^[0-9a-f]{64}$/.test(hash)) {
         return res.status(400).json({ error: "hash must be sha256 hex" });
       }
-      const claim = await findClaim(hash);
-      return res.status(200).json({ claimed: !!claim, claim });
+      const claim = await scanTopic(hash);
+      return res
+        .status(200)
+        .json({ claimed: !!claim, windowSec: WINDOW_SEC, claim });
     }
 
     if (req.method === "POST") {
-      const { hash, creator, name, symbol } = req.body ?? {};
-      if (!/^[0-9a-f]{64}$/.test(String(hash || "").toLowerCase())) {
+      const body = req.body ?? {};
+      const hash = String(body.hash || "").toLowerCase();
+      if (!/^[0-9a-f]{64}$/.test(hash)) {
         return res.status(400).json({ error: "hash must be sha256 hex" });
       }
+
+      if (body.kind === "challenge") {
+        if (!body.challenger) {
+          return res.status(400).json({ error: "challenger required" });
+        }
+        const existing = await scanTopic(hash);
+        if (!existing) {
+          return res.status(404).json({ error: "no claim to challenge" });
+        }
+        const seq = await submitMessage({
+          v: 1,
+          kind: "challenge",
+          hash,
+          challenger: String(body.challenger),
+          reason: String(body.reason ?? "").slice(0, 300),
+          ts: new Date().toISOString(),
+        });
+        return res.status(200).json({ topicId: TOPIC_ID, sequenceNumber: seq });
+      }
+
+      const { creator, name, symbol } = body;
       if (!creator || !name || !symbol) {
         return res.status(400).json({ error: "creator, name, symbol required" });
       }
-
-      const existing = await findClaim(String(hash).toLowerCase());
+      const existing = await scanTopic(hash);
       if (existing) {
-        return res.status(409).json({
-          error: "meme already claimed",
-          claim: existing,
-        });
+        return res
+          .status(409)
+          .json({ error: "meme already claimed", claim: existing });
       }
 
-      const claim: Claim = {
+      const seq = await submitMessage({
         v: 1,
-        hash: String(hash).toLowerCase(),
+        kind: "claim",
+        hash,
         creator: String(creator),
         name: String(name).slice(0, 100),
         symbol: String(symbol).slice(0, 20),
         ts: new Date().toISOString(),
-      };
-
-      const operatorId = (process.env.HCS_OPERATOR_ID || "").trim();
-      const operatorKey = PrivateKey.fromStringECDSA(
-        (process.env.HCS_OPERATOR_KEY || "").trim()
-      );
-      const client = Client.forTestnet().setOperator(operatorId, operatorKey);
-      try {
-        const tx = await new TopicMessageSubmitTransaction()
-          .setTopicId(TOPIC_ID)
-          .setMessage(JSON.stringify(claim))
-          .execute(client);
-        const receipt = await tx.getReceipt(client);
-        const seq = receipt.topicSequenceNumber?.toNumber() ?? 0;
-        return res.status(200).json({
-          topicId: TOPIC_ID,
-          sequenceNumber: seq,
-          memo: `hcs:${TOPIC_ID}/${seq}`,
-        });
-      } finally {
-        client.close();
-      }
+      });
+      const now = Math.floor(Date.now() / 1000);
+      return res.status(200).json({
+        topicId: TOPIC_ID,
+        sequenceNumber: seq,
+        memo: `hcs:${TOPIC_ID}/${seq}`,
+        readyAt: now + WINDOW_SEC,
+        windowSec: WINDOW_SEC,
+      });
     }
 
     res.setHeader("Allow", "GET, POST");

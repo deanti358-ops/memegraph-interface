@@ -31,16 +31,29 @@ export type NetworkStats = {
   totalCreatorClaimed: bigint;
   totalTrades: number;
   totalVolumeTinybar: bigint;
+  /* grant-milestone metrics (30-day window, straight from pool events) */
+  trades30d: number;
+  activeWallets30d: number;
+  tvlTinybar: bigint;
   tokens: TokenStats[];
 };
 
-type MirrorLog = { topics: string[]; data: string };
+type MirrorLog = { topics: string[]; data: string; timestamp: string };
 
-async function poolTradeStats(
-  pool: string
-): Promise<{ trades: number; volumeTinybar: bigint }> {
+type PoolTradeStats = {
+  trades: number;
+  volumeTinybar: bigint;
+  trades30d: number;
+  wallets30d: Set<string>;
+};
+
+async function poolTradeStats(pool: string): Promise<PoolTradeStats> {
   let trades = 0;
   let volume = 0n;
+  let trades30d = 0;
+  const wallets30d = new Set<string>();
+  const cutoff = Date.now() / 1000 - 30 * 24 * 3600;
+
   let url = `${network.mirrorNodeUrl}/contracts/${pool.toLowerCase()}/results/logs?limit=100&order=asc`;
   for (let page = 0; url && page < 20; page++) {
     const res = await fetch(url);
@@ -52,12 +65,15 @@ async function poolTradeStats(
           topics: log.topics,
           data: log.data,
         });
-        if (parsed?.name === "Buy") {
-          trades++;
-          volume += BigInt(parsed.args.hbarIn);
-        } else if (parsed?.name === "Sell") {
-          trades++;
-          volume += BigInt(parsed.args.hbarOut);
+        if (parsed?.name !== "Buy" && parsed?.name !== "Sell") continue;
+        trades++;
+        volume += BigInt(
+          parsed.name === "Buy" ? parsed.args.hbarIn : parsed.args.hbarOut
+        );
+        if (Number(log.timestamp.split(".")[0]) >= cutoff) {
+          trades30d++;
+          // arg 0 is the indexed buyer/seller address
+          wallets30d.add(String(parsed.args[0]).toLowerCase());
         }
       } catch {
         /* unrelated log */
@@ -67,7 +83,7 @@ async function poolTradeStats(
       ? `${network.mirrorNodeUrl.replace("/api/v1", "")}${d.links.next}`
       : "";
   }
-  return { trades, volumeTinybar: volume };
+  return { trades, volumeTinybar: volume, trades30d, wallets30d };
 }
 
 export async function fetchNetworkStats(): Promise<NetworkStats> {
@@ -78,16 +94,25 @@ export async function fetchNetworkStats(): Promise<NetworkStats> {
   const poolSeed: bigint = await factory.poolSeed().catch(() => 500_000_000n);
   const seedPrice = Number(poolSeed) / 1e8 / 1_000_000_000;
 
+  const emptyTrade = (): PoolTradeStats => ({
+    trades: 0,
+    volumeTinybar: 0n,
+    trades30d: 0,
+    wallets30d: new Set<string>(),
+  });
+
+  const tradeStats: PoolTradeStats[] = [];
   const tokens: TokenStats[] = await Promise.all(
     memes.map(async (m) => {
       const pool = poolRead(m.pool);
       const [vesting, pending, trade, price, reserves] = await Promise.all([
         factory.creatorVesting(m.token),
         factory.pendingRoyalties(m.token).catch(() => 0n),
-        poolTradeStats(m.pool).catch(() => ({ trades: 0, volumeTinybar: 0n })),
+        poolTradeStats(m.pool).catch(emptyTrade),
         pool.getPrice().catch(() => 0n),
         pool.getReserves().catch(() => [0n, 0n]),
       ]);
+      tradeStats.push(trade);
       const priceNow = Number(price) / 1e18;
       return {
         ...m,
@@ -106,6 +131,9 @@ export async function fetchNetworkStats(): Promise<NetworkStats> {
     })
   );
 
+  const allWallets = new Set<string>();
+  for (const t of tradeStats) for (const w of t.wallets30d) allWallets.add(w);
+
   const totalCreatorAccrued = tokens.reduce((a, t) => a + t.creatorAccrued, 0n);
   return {
     // creator share is 40% of the 1% royalty → total collected = accrued * 2.5
@@ -114,6 +142,9 @@ export async function fetchNetworkStats(): Promise<NetworkStats> {
     totalCreatorClaimed: tokens.reduce((a, t) => a + t.creatorClaimed, 0n),
     totalTrades: tokens.reduce((a, t) => a + t.trades, 0),
     totalVolumeTinybar: tokens.reduce((a, t) => a + t.volumeTinybar, 0n),
+    trades30d: tradeStats.reduce((a, t) => a + t.trades30d, 0),
+    activeWallets30d: allWallets.size,
+    tvlTinybar: tokens.reduce((a, t) => a + t.hbarReserve, 0n),
     tokens,
   };
 }

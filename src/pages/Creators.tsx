@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
+  fetchHbarUsd,
   fmtHbar,
   fmtTokens,
   shortAddr,
@@ -9,8 +10,37 @@ import {
 import { fetchNetworkStats, type NetworkStats } from "../lib/stats";
 import TokenAvatar from "../components/TokenAvatar";
 
+/** Hedera grant Milestone 3 targets — one of these must be met. */
+const M3 = { tx: 25_000, wallets: 200, tvlUsd: 20_000 };
+
+function MilestoneBar({
+  label,
+  value,
+  target,
+  display,
+}: {
+  label: string;
+  value: number;
+  target: number;
+  display: string;
+}) {
+  const pct = Math.min(100, (value / target) * 100);
+  return (
+    <div className="milestone">
+      <div className="milestone-head">
+        <span>{label}</span>
+        <span className="mono">{display}</span>
+      </div>
+      <div className="milestone-track">
+        <div className="milestone-fill" style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
 export default function Creators() {
   const [stats, setStats] = useState<NetworkStats | null>(null);
+  const [hbarUsd, setHbarUsd] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -18,6 +48,7 @@ export default function Creators() {
     fetchNetworkStats()
       .then((s) => alive && setStats(s))
       .catch((e) => alive && setError(String(e)));
+    fetchHbarUsd().then((v) => alive && setHbarUsd(v));
     return () => {
       alive = false;
     };
@@ -61,6 +92,41 @@ export default function Creators() {
               <div className="tile-label">trade volume</div>
             </div>
           </div>
+
+          <section className="panel milestone-panel">
+            <h2>Grant milestone progress · last 30 days</h2>
+            <MilestoneBar
+              label={`Monthly transactions (target ${M3.tx.toLocaleString()})`}
+              value={stats.trades30d}
+              target={M3.tx}
+              display={stats.trades30d.toLocaleString()}
+            />
+            <MilestoneBar
+              label={`Active wallets (target ${M3.wallets})`}
+              value={stats.activeWallets30d}
+              target={M3.wallets}
+              display={stats.activeWallets30d.toLocaleString()}
+            />
+            <MilestoneBar
+              label={`TVL (target $${M3.tvlUsd.toLocaleString()})`}
+              value={
+                hbarUsd !== null
+                  ? (Number(stats.tvlTinybar) / 1e8) * hbarUsd
+                  : 0
+              }
+              target={M3.tvlUsd}
+              display={
+                hbarUsd !== null
+                  ? `$${((Number(stats.tvlTinybar) / 1e8) * hbarUsd).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+                  : `${fmtHbar(stats.tvlTinybar)} ℏ`
+              }
+            />
+            <p className="muted small">
+              Counted from on-chain pool events and reserves via the Hedera
+              mirror node — the same numbers the grant program verifies.
+              Milestone 3 requires any one of the three.
+            </p>
+          </section>
 
           <div className="table-wrap">
           <table className="table">
