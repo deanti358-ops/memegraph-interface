@@ -1,54 +1,43 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  fetchHbarUsd,
   fmtHbar,
   fmtTokens,
   shortAddr,
   hashscanAddr,
 } from "../lib/memegraph";
-import { fetchNetworkStats, type NetworkStats } from "../lib/stats";
+import {
+  fetchNetworkStats,
+  fetchRecentTrades,
+  type NetworkStats,
+  type RecentTrade,
+} from "../lib/stats";
 import TokenAvatar from "../components/TokenAvatar";
 
-/** Hedera grant Milestone 3 targets — one of these must be met. */
-const M3 = { tx: 25_000, wallets: 200, tvlUsd: 20_000 };
-
-function MilestoneBar({
-  label,
-  value,
-  target,
-  display,
-}: {
-  label: string;
-  value: number;
-  target: number;
-  display: string;
-}) {
-  const pct = Math.min(100, (value / target) * 100);
-  return (
-    <div className="milestone">
-      <div className="milestone-head">
-        <span>{label}</span>
-        <span className="mono">{display}</span>
-      </div>
-      <div className="milestone-track">
-        <div className="milestone-fill" style={{ width: `${pct}%` }} />
-      </div>
-    </div>
-  );
+function timeAgo(t: number): string {
+  const s = Math.max(1, Math.floor(Date.now() / 1000 - t));
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
 }
 
 export default function Creators() {
   const [stats, setStats] = useState<NetworkStats | null>(null);
-  const [hbarUsd, setHbarUsd] = useState<number | null>(null);
+  const [recent, setRecent] = useState<RecentTrade[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
     fetchNetworkStats()
-      .then((s) => alive && setStats(s))
+      .then((s) => {
+        if (!alive) return;
+        setStats(s);
+        fetchRecentTrades(s.tokens)
+          .then((r) => alive && setRecent(r))
+          .catch(() => alive && setRecent([]));
+      })
       .catch((e) => alive && setError(String(e)));
-    fetchHbarUsd().then((v) => alive && setHbarUsd(v));
     return () => {
       alive = false;
     };
@@ -94,37 +83,38 @@ export default function Creators() {
           </div>
 
           <section className="panel milestone-panel">
-            <h2>Grant milestone progress · last 30 days</h2>
-            <MilestoneBar
-              label={`Monthly transactions (target ${M3.tx.toLocaleString()})`}
-              value={stats.trades30d}
-              target={M3.tx}
-              display={stats.trades30d.toLocaleString()}
-            />
-            <MilestoneBar
-              label={`Active wallets (target ${M3.wallets})`}
-              value={stats.activeWallets30d}
-              target={M3.wallets}
-              display={stats.activeWallets30d.toLocaleString()}
-            />
-            <MilestoneBar
-              label={`TVL (target $${M3.tvlUsd.toLocaleString()})`}
-              value={
-                hbarUsd !== null
-                  ? (Number(stats.tvlTinybar) / 1e8) * hbarUsd
-                  : 0
-              }
-              target={M3.tvlUsd}
-              display={
-                hbarUsd !== null
-                  ? `$${((Number(stats.tvlTinybar) / 1e8) * hbarUsd).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
-                  : `${fmtHbar(stats.tvlTinybar)} ℏ`
-              }
-            />
+            <h2>Live activity</h2>
+            {!recent && <div className="muted small">Reading pool events…</div>}
+            {recent && recent.length === 0 && (
+              <div className="muted small">No trades yet.</div>
+            )}
+            {recent && recent.length > 0 && (
+              <ul className="activity-feed">
+                {recent.map((r, i) => (
+                  <li key={`${r.memeId}-${r.t}-${i}`}>
+                    <Link to={`/t/${r.memeId}`} className="token-cell">
+                      <TokenAvatar
+                        symbol={r.symbol}
+                        address={r.token}
+                        memo={r.memeMemo}
+                        size={24}
+                      />
+                      <strong>{r.symbol ?? "?"}</strong>
+                    </Link>
+                    <span
+                      className={r.kind === "buy" ? "delta-up" : "delta-down"}
+                    >
+                      {r.kind.toUpperCase()}
+                    </span>
+                    <span className="mono">{fmtHbar(r.hbarTinybar, 3)} ℏ</span>
+                    <span className="muted small">{timeAgo(r.t)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
             <p className="muted small">
-              Counted from on-chain pool events and reserves via the Hedera
-              mirror node — the same numbers the grant program verifies.
-              Milestone 3 requires any one of the three.
+              Straight from pool Buy/Sell events on the Hedera mirror node —
+              every entry is a real, consensus-timestamped transaction.
             </p>
           </section>
 

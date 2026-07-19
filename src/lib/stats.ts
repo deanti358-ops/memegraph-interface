@@ -86,6 +86,60 @@ async function poolTradeStats(pool: string): Promise<PoolTradeStats> {
   return { trades, volumeTinybar: volume, trades30d, wallets30d };
 }
 
+export type RecentTrade = {
+  memeId: number;
+  symbol?: string;
+  token: string;
+  memeMemo: string;
+  kind: "buy" | "sell";
+  hbarTinybar: bigint;
+  t: number; // unix seconds
+};
+
+/** Latest trades across all pools, newest first. */
+export async function fetchRecentTrades(
+  tokens: TokenStats[],
+  limit = 12
+): Promise<RecentTrade[]> {
+  const all: RecentTrade[] = [];
+  await Promise.all(
+    tokens.map(async (m) => {
+      try {
+        const res = await fetch(
+          `${network.mirrorNodeUrl}/contracts/${m.pool.toLowerCase()}/results/logs?limit=25&order=desc`
+        );
+        if (!res.ok) return;
+        const d = await res.json();
+        for (const log of (d.logs ?? []) as MirrorLog[]) {
+          try {
+            const parsed = poolInterface.parseLog({
+              topics: log.topics,
+              data: log.data,
+            });
+            if (parsed?.name !== "Buy" && parsed?.name !== "Sell") continue;
+            all.push({
+              memeId: m.id,
+              symbol: m.symbol,
+              token: m.token,
+              memeMemo: m.memeMemo,
+              kind: parsed.name === "Buy" ? "buy" : "sell",
+              hbarTinybar: BigInt(
+                parsed.name === "Buy" ? parsed.args.hbarIn : parsed.args.hbarOut
+              ),
+              t: Number(log.timestamp.split(".")[0]),
+            });
+          } catch {
+            /* unrelated log */
+          }
+        }
+      } catch {
+        /* pool unreadable */
+      }
+    })
+  );
+  return all.sort((a, b) => b.t - a.t).slice(0, limit);
+}
+
 export async function fetchNetworkStats(): Promise<NetworkStats> {
   const memes = await fetchMemes();
   const factory = factoryRead();
