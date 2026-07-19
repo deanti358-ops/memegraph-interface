@@ -108,6 +108,25 @@ export function hashscanAddr(addr: string): string {
   return `${network.hashscanUrl}/address/${addr}`;
 }
 
+/** Dollars per HBAR, from the network's own fee-schedule exchange rate. */
+export async function fetchHbarUsd(): Promise<number | null> {
+  try {
+    const res = await fetch(`${network.mirrorNodeUrl}/network/exchangerate`);
+    const d = await res.json();
+    return d.current_rate.cent_equivalent / d.current_rate.hbar_equivalent / 100;
+  } catch {
+    return null;
+  }
+}
+
+/** Compact dollar formatting across the huge range meme prices span. */
+export function fmtUsd(usd: number): string {
+  if (usd === 0) return "$0";
+  if (usd >= 0.01)
+    return `$${usd.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  return `$${usd.toPrecision(2).replace(/e-?\d+$/, (m) => `e${m.slice(1)}`)}`;
+}
+
 // ---------------------------------------------------------------------------
 // Mirror node helpers
 // ---------------------------------------------------------------------------

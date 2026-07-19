@@ -160,7 +160,6 @@ function App() {
           </NavLink>
           <NavLink to="/launch">Launchpad</NavLink>
           <NavLink to="/creators">Creators</NavLink>
-          <NavLink to="/whitepaper">Whitepaper</NavLink>
         </nav>
         <span className="net-pill">
           <span className="net-dot" />

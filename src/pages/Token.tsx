@@ -4,9 +4,11 @@ import { parseUnits } from "ethers";
 import { useWallet } from "../lib/wallet";
 import {
   factoryRead,
+  fetchHbarUsd,
   fmtHbar,
   fmtPrice,
   fmtTokens,
+  fmtUsd,
   hashscanAddr,
   poolRead,
   shortAddr,
@@ -18,6 +20,7 @@ import {
 } from "../lib/memegraph";
 import { DEFAULT_SLIPPAGE_BPS, network } from "../config";
 import PriceChart from "../components/PriceChart";
+import TokenAvatar from "../components/TokenAvatar";
 import { fetchPriceHistory, type PricePoint } from "../lib/priceHistory";
 
 type Details = MemeInfo & {
@@ -41,8 +44,9 @@ const TIMEFRAMES: { label: string; seconds: number | null }[] = [
   { label: "All", seconds: null },
 ];
 
-/** Filters points to the trailing window, carrying in the entry price so the
-    line starts at the left edge instead of appearing mid-chart. */
+/** Filters points to a trailing window **anchored to the latest trade**
+    (not wall-clock now — on a quiet pool every short window would be empty).
+    Carries in the entry price so the line starts at the left edge. */
 function ChartWindow({
   points,
   windowSec,
@@ -52,10 +56,10 @@ function ChartWindow({
   windowSec: number | null;
   symbol: string;
 }) {
-  const now = Math.floor(Date.now() / 1000);
   let visible = points;
-  if (windowSec !== null) {
-    const from = now - windowSec;
+  if (windowSec !== null && points.length > 0) {
+    const anchor = points[points.length - 1].t;
+    const from = anchor - windowSec;
     const inside = points.filter((p) => p.t >= from);
     const before = points.filter((p) => p.t < from);
     const carryIn = before.length
@@ -80,6 +84,11 @@ export default function Token() {
   const [d, setD] = useState<Details | null>(null);
   const [history, setHistory] = useState<PricePoint[] | null>(null);
   const [timeframe, setTimeframe] = useState<number | null>(null); // seconds
+  const [hbarUsd, setHbarUsd] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetchHbarUsd().then(setHbarUsd);
+  }, []);
   const [balance, setBalance] = useState<bigint | null>(null);
   const [tab, setTab] = useState<"buy" | "sell">("buy");
   const [amount, setAmount] = useState("");
@@ -250,19 +259,31 @@ export default function Token() {
   return (
     <div className="page">
       <div className="token-header">
-        <div>
-          <h1>
-            {d.name ?? "…"} <span className="token-symbol big">{d.symbol ?? ""}</span>
-          </h1>
-          <div className="muted mono">
-            token <a href={hashscanAddr(d.token)} target="_blank" rel="noreferrer">{shortAddr(d.token)}</a>
-            {" · "}pool <a href={hashscanAddr(d.pool)} target="_blank" rel="noreferrer">{shortAddr(d.pool)}</a>
-            {" · "}creator <a href={hashscanAddr(d.creator)} target="_blank" rel="noreferrer">{shortAddr(d.creator)}</a>
+        <div className="token-cell">
+          <TokenAvatar symbol={d.symbol} address={d.token} size={56} />
+          <div>
+            <h1>
+              {d.name ?? "…"} <span className="token-symbol big">{d.symbol ?? ""}</span>
+            </h1>
+            <div className="muted mono">
+              token <a href={hashscanAddr(d.token)} target="_blank" rel="noreferrer">{shortAddr(d.token)}</a>
+              {" · "}pool <a href={hashscanAddr(d.pool)} target="_blank" rel="noreferrer">{shortAddr(d.pool)}</a>
+              {" · "}creator <a href={hashscanAddr(d.creator)} target="_blank" rel="noreferrer">{shortAddr(d.creator)}</a>
+            </div>
           </div>
         </div>
         <div className="price-tag">
           <div className="price">{fmtPrice(d.price)} ℏ</div>
-          <div className="muted">per token</div>
+          <div className="muted">
+            {hbarUsd !== null
+              ? `${fmtUsd((Number(d.price) / 1e18) * hbarUsd)} per token`
+              : "per token"}
+          </div>
+          {hbarUsd !== null && (
+            <div className="muted small">
+              mkt cap {fmtUsd((Number(d.price) / 1e18) * 1e9 * hbarUsd)}
+            </div>
+          )}
         </div>
       </div>
 

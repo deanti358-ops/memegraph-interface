@@ -7,6 +7,7 @@ import {
   hashscanAddr,
 } from "../lib/memegraph";
 import { fetchNetworkStats, type NetworkStats } from "../lib/stats";
+import TokenAvatar from "../components/TokenAvatar";
 
 export default function Creators() {
   const [stats, setStats] = useState<NetworkStats | null>(null);
@@ -78,7 +79,10 @@ export default function Creators() {
               {stats.tokens.map((t) => (
                 <tr key={t.id}>
                   <td>
-                    <Link to={`/t/${t.id}`}>{t.symbol ?? shortAddr(t.token)}</Link>
+                    <Link to={`/t/${t.id}`} className="token-cell">
+                      <TokenAvatar symbol={t.symbol} address={t.token} size={26} />
+                      {t.symbol ?? shortAddr(t.token)}
+                    </Link>
                   </td>
                   <td className="mono">
                     <a

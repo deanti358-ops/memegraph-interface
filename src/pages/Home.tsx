@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { fmtHbar, fmtPrice, fmtTokens, shortAddr } from "../lib/memegraph";
+import { fmtHbar, fmtPrice, fmtTokens, fmtUsd, shortAddr } from "../lib/memegraph";
 import { fetchNetworkStats, type TokenStats } from "../lib/stats";
 import { network } from "../config";
+import TokenAvatar from "../components/TokenAvatar";
 
 type SortKey = "price" | "changePct" | "hbarReserve" | "volumeTinybar" | "trades";
 
@@ -120,14 +121,21 @@ export default function Home() {
 
       {topPerformer && (
         <Link to={`/t/${topPerformer.id}`} className="top-performer">
-          <div>
-            <div className="tp-label">🔥 Top performing memecoin</div>
-            <div className="tp-name">
-              {topPerformer.name ?? "…"}{" "}
-              <span className="token-symbol">{topPerformer.symbol ?? ""}</span>
-            </div>
-            <div className="muted small mono">
-              by {shortAddr(topPerformer.creator)}
+          <div className="token-cell">
+            <TokenAvatar
+              symbol={topPerformer.symbol}
+              address={topPerformer.token}
+              size={52}
+            />
+            <div>
+              <div className="tp-label">🔥 Top performing memecoin</div>
+              <div className="tp-name">
+                {topPerformer.name ?? "…"}{" "}
+                <span className="token-symbol">{topPerformer.symbol ?? ""}</span>
+              </div>
+              <div className="muted small mono">
+                by {shortAddr(topPerformer.creator)}
+              </div>
             </div>
           </div>
           <dl className="tp-stats">
@@ -177,6 +185,7 @@ export default function Home() {
               <th>Token</th>
               <Th k="price">Price</Th>
               <Th k="changePct">Since launch</Th>
+              <Th k="price">Mkt cap</Th>
               <Th k="hbarReserve">Liquidity</Th>
               <Th k="volumeTinybar">Volume</Th>
               <Th k="trades">Trades</Th>
@@ -188,12 +197,22 @@ export default function Home() {
               <tr key={t.id}>
                 <td className="muted">{t.id}</td>
                 <td>
-                  <Link to={`/t/${t.id}`}>
-                    <strong>{t.symbol ?? shortAddr(t.token)}</strong>
-                  </Link>{" "}
-                  <span className="muted small">{t.name ?? ""}</span>
+                  <Link to={`/t/${t.id}`} className="token-cell">
+                    <TokenAvatar symbol={t.symbol} address={t.token} size={30} />
+                    <span>
+                      <strong>{t.symbol ?? shortAddr(t.token)}</strong>{" "}
+                      <span className="muted small">{t.name ?? ""}</span>
+                    </span>
+                  </Link>
                 </td>
-                <td className="mono">{fmtPrice(t.price)} ℏ</td>
+                <td className="mono">
+                  {fmtPrice(t.price)} ℏ
+                  {centsPerHbar !== null && (
+                    <div className="muted small">
+                      {fmtUsd((Number(t.price) / 1e18) * (centsPerHbar / 100))}
+                    </div>
+                  )}
+                </td>
                 <td
                   className={
                     (t.changePct ?? 0) >= 0
@@ -202,6 +221,13 @@ export default function Home() {
                   }
                 >
                   {fmtChange(t.changePct)}
+                </td>
+                <td className="mono">
+                  {centsPerHbar !== null
+                    ? fmtUsd(
+                        (Number(t.price) / 1e18) * 1e9 * (centsPerHbar / 100)
+                      )
+                    : "—"}
                 </td>
                 <td className="mono">{fmtHbar(t.hbarReserve)} ℏ</td>
                 <td className="mono">{fmtHbar(t.volumeTinybar)} ℏ</td>
