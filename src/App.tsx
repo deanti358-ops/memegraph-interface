@@ -12,6 +12,7 @@ function ConnectButton() {
     displayAccount,
     kind,
     connecting,
+    walletError,
     connectMetaMask,
     connectHashPack,
     disconnect,
@@ -65,6 +66,7 @@ function ConnectButton() {
           </button>
         </div>
       )}
+      {walletError && <div className="connect-error">{walletError}</div>}
     </div>
   );
 }

@@ -40,6 +40,7 @@ type WalletState = {
   displayAccount: string | null;
   connecting: boolean;
   hasMetaMask: boolean;
+  walletError: string | null;
   connectMetaMask: () => Promise<void>;
   connectHashPack: () => Promise<void>;
   disconnect: () => void;
@@ -85,6 +86,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [displayAccount, setDisplayAccount] = useState<string | null>(null);
   const [hederaAccountId, setHederaAccountId] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
+  const [walletError, setWalletError] = useState<string | null>(null);
   const hasMetaMask = typeof window !== "undefined" && !!window.ethereum;
 
   const applyHashPackSession = useCallback(async (accountIds: string[]) => {
@@ -135,15 +137,29 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const connectHashPack = useCallback(async () => {
     setConnecting(true);
+    setWalletError(null);
     try {
-      await initHashConnect(
-        (session) => applyHashPackSession(session.accountIds),
-        () => {
-          setKind((k) => (k === "hashpack" ? null : k));
-          setHederaAccountId(null);
-        }
-      );
+      // The WalletConnect relay refuses clients whose clock is skewed and
+      // hashconnect then retries forever — don't hang the UI on it.
+      await Promise.race([
+        initHashConnect(
+          (session) => applyHashPackSession(session.accountIds),
+          () => {
+            setKind((k) => (k === "hashpack" ? null : k));
+            setHederaAccountId(null);
+          }
+        ),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("relay-timeout")), 15_000)
+        ),
+      ]);
       getHashConnect().openPairingModal();
+    } catch (e) {
+      setWalletError(
+        (e as Error).message === "relay-timeout"
+          ? "Couldn't reach the WalletConnect relay. Make sure your computer's clock and time zone are set correctly, then try again."
+          : `HashPack connection failed: ${(e as Error).message}`
+      );
     } finally {
       setConnecting(false);
     }
@@ -193,6 +209,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         displayAccount,
         connecting,
         hasMetaMask,
+        walletError,
         connectMetaMask,
         connectHashPack,
         disconnect,

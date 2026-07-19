@@ -157,6 +157,19 @@ h2 {
 .connect-option + .connect-option {
   border-top: 1px solid var(--border);
 }
+.connect-error {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  background: var(--bg-panel);
+  border: 1px solid var(--red);
+  color: var(--red);
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  width: 280px;
+  font-size: 0.82rem;
+  z-index: 20;
+}
 .wide {
   width: 100%;
   margin-top: 0.9rem;
