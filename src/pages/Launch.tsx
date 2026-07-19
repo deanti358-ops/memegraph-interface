@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWallet } from "../lib/wallet";
-import { factoryRead } from "../lib/memegraph";
+import { factoryRead, fetchMemes } from "../lib/memegraph";
 import { LAUNCH_VALUE_HBAR } from "../config";
 import {
   downscaleToB64,
@@ -159,7 +159,18 @@ export default function Launch() {
         }
       }
 
-      // 2. Launch the token with the claim reference in its immutable memo.
+      // 2. One claim, one token: block relaunching an already-tokenized meme.
+      if (memo) {
+        setStatus("Checking this meme isn't already tokenized…");
+        const existing = (await fetchMemes()).find((m) => m.memeMemo === memo);
+        if (existing) {
+          throw new Error(
+            `This meme already has a live token (${existing.symbol ?? `#${existing.id}`}) — one claim, one token. Trade it instead.`
+          );
+        }
+      }
+
+      // 3. Launch the token with the claim reference in its immutable memo.
       await adapter.launchMeme(
         name.trim(),
         symbol.trim().toUpperCase(),
