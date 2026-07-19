@@ -508,6 +508,32 @@ input:focus {
   font-size: 0.92rem;
 }
 
+/* ---- stat tiles ---- */
+.stat-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.6rem;
+}
+.tile {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem 1.2rem;
+}
+.tile-value {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text-bright);
+  font-family: var(--mono);
+  overflow-wrap: anywhere;
+}
+.tile-label {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  margin-top: 0.15rem;
+}
+
 /* ---- table ---- */
 .table {
   width: 100%;
