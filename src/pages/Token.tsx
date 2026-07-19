@@ -16,7 +16,7 @@ import {
   TOKEN_DECIMALS,
   type MemeInfo,
 } from "../lib/memegraph";
-import { DEFAULT_SLIPPAGE_BPS } from "../config";
+import { DEFAULT_SLIPPAGE_BPS, network } from "../config";
 
 type Details = MemeInfo & {
   price: bigint;
@@ -264,7 +264,20 @@ export default function Token() {
             </div>
             <div>
               <dt>Provenance</dt>
-              <dd className="mono small">{d.memeMemo || "—"}</dd>
+              <dd className="mono small">
+                {d.memeMemo.startsWith("hcs:") ? (
+                  <a
+                    href={`${network.hashscanUrl}/topic/${d.memeMemo.slice(4).split("/")[0]}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="Immutable claim record on the Hedera Consensus Service"
+                  >
+                    {d.memeMemo}
+                  </a>
+                ) : (
+                  d.memeMemo || "—"
+                )}
+              </dd>
             </div>
             <div>
               <dt>Launched</dt>

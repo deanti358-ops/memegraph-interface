@@ -31,6 +31,9 @@ export const LAUNCH_VALUE_HBAR = "50";
 /** Default slippage tolerance (bps) — generous because of the 1% network royalty. */
 export const DEFAULT_SLIPPAGE_BPS = 300;
 
+/** HCS topic holding meme provenance claims (see api/claim.ts). */
+export const CLAIMS_TOPIC_ID = "0.0.9638085";
+
 /** WalletConnect Cloud project id (public — ships in the bundle either way). */
 export const WALLETCONNECT_PROJECT_ID =
   import.meta.env.VITE_WALLETCONNECT_PROJECT_ID ??
