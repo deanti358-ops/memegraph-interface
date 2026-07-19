@@ -26,13 +26,15 @@ const WINDOW_SEC = Number(process.env.CHALLENGE_WINDOW_SECONDS || 600);
 
 type Msg = {
   v: 1;
-  kind?: "claim" | "challenge"; // legacy messages without kind are claims
+  kind?: "claim" | "challenge" | "image"; // legacy messages without kind are claims
   hash: string;
   creator?: string;
   challenger?: string;
   reason?: string;
   name?: string;
   symbol?: string;
+  /** kind:"image" — base64 JPEG, ≤16k chars; SDK chunks it onto the topic */
+  data?: string;
   ts: string;
 };
 
@@ -58,6 +60,7 @@ async function scanTopic(hash: string): Promise<FoundClaim | null> {
           Buffer.from(m.message, "base64").toString("utf8")
         ) as Msg;
         if (msg.hash !== hash) continue;
+        if (msg.kind === "image") continue;
         const isChallenge = msg.kind === "challenge";
         if (isChallenge) {
           challenges++;
@@ -121,6 +124,25 @@ export default async function handler(req: any, res: any) {
       const hash = String(body.hash || "").toLowerCase();
       if (!/^[0-9a-f]{64}$/.test(hash)) {
         return res.status(400).json({ error: "hash must be sha256 hex" });
+      }
+
+      if (body.kind === "image") {
+        const data = String(body.data || "");
+        if (!data || data.length > 16_000) {
+          return res.status(400).json({ error: "image data missing or too large" });
+        }
+        const existing = await scanTopic(hash);
+        if (!existing) {
+          return res.status(404).json({ error: "no claim for this hash" });
+        }
+        const seq = await submitMessage({
+          v: 1,
+          kind: "image",
+          hash,
+          data,
+          ts: new Date().toISOString(),
+        });
+        return res.status(200).json({ topicId: TOPIC_ID, sequenceNumber: seq });
       }
 
       if (body.kind === "challenge") {

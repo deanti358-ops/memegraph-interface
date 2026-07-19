@@ -3,6 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { useWallet } from "../lib/wallet";
 import { factoryRead } from "../lib/memegraph";
 import { LAUNCH_VALUE_HBAR } from "../config";
+import {
+  downscaleToB64,
+  hashHasImage,
+  invalidateTopicCache,
+} from "../lib/memeImage";
 
 async function sha256Hex(file: File): Promise<string> {
   const buf = await file.arrayBuffer();
@@ -84,7 +89,19 @@ export default function Launch() {
         }
 
         if (check.claimed) {
-          // Our own earlier claim — enforce the challenge window
+          // Our own earlier claim — backfill the artwork if it isn't on
+          // Hedera yet (e.g. claims made before image storage existed)
+          if (!(await hashHasImage(hash))) {
+            setStatus("Storing your meme's artwork on Hedera…");
+            const b64 = await downscaleToB64(file);
+            await fetch("/api/claim", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ kind: "image", hash, data: b64 }),
+            });
+            invalidateTopicCache();
+          }
+          // Enforce the challenge window
           if (now < check.claim.readyAt) {
             const opens = new Date(
               check.claim.readyAt * 1000
@@ -115,6 +132,21 @@ export default function Launch() {
           if (!claimRes.ok) {
             throw new Error(claim.error ?? "claim failed");
           }
+
+          // Store the artwork itself on Hedera, chunked onto the HCS topic
+          setStatus("Storing your meme's artwork on Hedera…");
+          try {
+            const b64 = await downscaleToB64(file);
+            await fetch("/api/claim", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ kind: "image", hash, data: b64 }),
+            });
+            invalidateTopicCache();
+          } catch {
+            /* artwork is cosmetic; the claim itself already succeeded */
+          }
+
           if (claim.windowSec > 0) {
             const opens = new Date(claim.readyAt * 1000).toLocaleTimeString();
             setStatus(

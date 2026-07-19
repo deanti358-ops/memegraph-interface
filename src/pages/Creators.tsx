@@ -146,7 +146,7 @@ export default function Creators() {
                 <tr key={t.id}>
                   <td>
                     <Link to={`/t/${t.id}`} className="token-cell">
-                      <TokenAvatar symbol={t.symbol} address={t.token} size={26} />
+                      <TokenAvatar symbol={t.symbol} address={t.token} memo={t.memeMemo} size={26} />
                       {t.symbol ?? shortAddr(t.token)}
                     </Link>
                   </td>

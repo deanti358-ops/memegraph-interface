@@ -262,7 +262,7 @@ export default function Token() {
     <div className="page">
       <div className="token-header">
         <div className="token-cell">
-          <TokenAvatar symbol={d.symbol} address={d.token} size={56} />
+          <TokenAvatar symbol={d.symbol} address={d.token} memo={d.memeMemo} size={56} />
           <div>
             <h1>
               {d.name ?? "…"} <span className="token-symbol big">{d.symbol ?? ""}</span>

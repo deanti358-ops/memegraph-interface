@@ -198,7 +198,7 @@ export default function Home() {
                 <td className="muted">{t.id}</td>
                 <td>
                   <Link to={`/t/${t.id}`} className="token-cell">
-                    <TokenAvatar symbol={t.symbol} address={t.token} size={30} />
+                    <TokenAvatar symbol={t.symbol} address={t.token} memo={t.memeMemo} size={30} />
                     <span>
                       <strong>{t.symbol ?? shortAddr(t.token)}</strong>{" "}
                       <span className="muted small">{t.name ?? ""}</span>
