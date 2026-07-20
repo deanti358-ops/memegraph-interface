@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { parseUnits } from "ethers";
+import { formatEther, parseUnits } from "ethers";
 import { ShieldCheck, ShieldX, ExternalLink, Droplets, FileText, Clock, Coins, Lock } from "lucide-react";
-import { useWallet } from "../lib/wallet";
+import { useWallet, readProvider } from "../lib/wallet";
 import {
   factoryRead,
   fetchHbarUsd,
@@ -104,9 +104,11 @@ export default function Token() {
     fetchHbarUsd().then(setHbarUsd);
   }, []);
   const [balance, setBalance] = useState<bigint | null>(null);
+  const [hbarBalance, setHbarBalance] = useState<number | null>(null);
   const [tab, setTab] = useState<"buy" | "sell">("buy");
   const [amount, setAmount] = useState("");
   const [quote, setQuote] = useState<bigint | null>(null);
+  const [slippageBps, setSlippageBps] = useState(DEFAULT_SLIPPAGE_BPS);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -146,8 +148,13 @@ export default function Token() {
     });
     if (evmAddress) {
       setBalance(await tokenRead(m.token).balanceOf(evmAddress));
+      readProvider
+        .getBalance(evmAddress)
+        .then((b) => setHbarBalance(Number(formatEther(b))))
+        .catch(() => setHbarBalance(null));
     } else {
       setBalance(null);
+      setHbarBalance(null);
     }
 
     // Price history from pool events (fire-and-forget; mirror node lags a
@@ -195,7 +202,7 @@ export default function Token() {
     if (!amount || Number(amount) <= 0 || quote === null) return;
     setBusy(true);
     try {
-      const minOut = (quote * BigInt(10_000 - DEFAULT_SLIPPAGE_BPS)) / 10_000n;
+      const minOut = (quote * BigInt(10_000 - slippageBps)) / 10_000n;
       if (tab === "buy") {
         await adapter.buy(d.token, d.pool, amount, minOut, setStatus);
       } else {
@@ -410,38 +417,103 @@ export default function Token() {
           </div>
 
           <label className="mb-1 block text-xs font-semibold text-ink-dim">
-            {tab === "buy" ? "Spend (HBAR)" : `Sell (${d.symbol ?? "tokens"})`}
+            {tab === "buy" ? "Amount (HBAR)" : `Amount (${d.symbol ?? "tokens"})`}
           </label>
-          <input
-            type="number"
-            min="0"
-            step="any"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="0.0"
-            className="w-full rounded-xl border border-hairline bg-surface/60 px-3.5 py-2.5 font-mono text-base text-ink-bright outline-none transition-all duration-200 placeholder:text-ink-dim focus:border-neon-cyan focus:shadow-[0_0_16px_-6px_var(--color-neon-cyan)]"
-          />
+          <div className="relative">
+            <input
+              type="number"
+              min="0"
+              step="any"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="0.0"
+              className="w-full rounded-xl border border-hairline bg-surface/60 px-3.5 py-2.5 pr-14 font-mono text-base text-ink-bright outline-none transition-all duration-200 placeholder:text-ink-dim focus:border-neon-cyan focus:shadow-[0_0_16px_-6px_var(--color-neon-cyan)]"
+            />
+            <button
+              onClick={() => {
+                if (tab === "buy") {
+                  if (hbarBalance === null) return;
+                  setAmount(Math.max(0, hbarBalance - 0.5).toFixed(4));
+                } else if (balance !== null) {
+                  setAmount((Number(balance) / 10 ** TOKEN_DECIMALS).toString());
+                }
+              }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg bg-hairline px-2 py-1 text-[11px] font-bold text-ink-bright transition-colors duration-200 hover:bg-neon-purple/30"
+            >
+              MAX
+            </button>
+          </div>
 
-          {tab === "sell" && balance !== null && (
-            <div className="mt-2 text-xs text-ink-dim">
-              Balance: {fmtTokens(balance)} {d.symbol}{" "}
+          {/* percentage quick-picks */}
+          <div className="mt-2 grid grid-cols-5 gap-1.5">
+            {[10, 25, 50, 75, 100].map((pct) => (
               <button
-                onClick={() => setAmount((Number(balance) / 10 ** TOKEN_DECIMALS).toString())}
-                className="font-semibold text-neon-cyan hover:underline"
+                key={pct}
+                onClick={() => {
+                  if (tab === "buy") {
+                    if (hbarBalance === null) return;
+                    const spendable = Math.max(0, hbarBalance - 0.5);
+                    setAmount(((spendable * pct) / 100).toFixed(4));
+                  } else if (balance !== null) {
+                    const bal = Number(balance) / 10 ** TOKEN_DECIMALS;
+                    setAmount(((bal * pct) / 100).toString());
+                  }
+                }}
+                className="rounded-lg border border-hairline bg-surface/40 py-1.5 font-mono text-[11px] font-bold text-ink transition-all duration-200 hover:border-neon-purple hover:text-ink-bright"
               >
-                max
+                {pct}%
               </button>
-            </div>
-          )}
+            ))}
+          </div>
 
-          {quote !== null && (
-            <div className="mt-3 rounded-xl border border-hairline bg-surface/40 px-3.5 py-2.5 font-mono text-sm text-ink-bright">
-              ≈ {tab === "buy" ? `${fmtTokens(quote)} ${d.symbol ?? ""}` : `${fmtHbar(quote, 4)} ℏ`}
-              <div className="mt-0.5 font-sans text-xs font-normal text-ink-dim">
-                before the 1% network royalty · slippage {DEFAULT_SLIPPAGE_BPS / 100}%
-              </div>
+          {/* slippage tolerance */}
+          <div className="mt-3 flex items-center justify-between">
+            <span className="text-xs font-semibold text-ink-dim">Slippage</span>
+            <div className="flex gap-1">
+              {[50, 100, 200, 300].map((bps) => (
+                <button
+                  key={bps}
+                  onClick={() => setSlippageBps(bps)}
+                  className={`rounded-lg px-2 py-1 font-mono text-[11px] font-bold transition-all duration-200 ${
+                    slippageBps === bps
+                      ? "bg-gradient-to-r from-neon-purple to-neon-pink text-white"
+                      : "border border-hairline bg-surface/40 text-ink-dim hover:text-ink-bright"
+                  }`}
+                >
+                  {(bps / 100).toFixed(1)}%
+                </button>
+              ))}
             </div>
-          )}
+          </div>
+
+          {/* balance + estimated receive */}
+          <div className="mt-3 flex flex-col gap-1.5 rounded-xl border border-hairline bg-surface/40 px-3.5 py-2.5 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-ink-dim">Balance</span>
+              <span className="font-mono text-ink-bright">
+                {tab === "buy"
+                  ? hbarBalance !== null
+                    ? `${hbarBalance.toLocaleString(undefined, { maximumFractionDigits: 4 })} ℏ`
+                    : "—"
+                  : balance !== null
+                  ? `${fmtTokens(balance)} ${d.symbol ?? ""}`
+                  : "—"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-ink-dim">You receive</span>
+              <span className="font-mono font-bold text-ink-bright">
+                {quote !== null
+                  ? tab === "buy"
+                    ? `~${fmtTokens(quote)} ${d.symbol ?? ""}`
+                    : `~${fmtHbar(quote, 4)} ℏ`
+                  : "—"}
+              </span>
+            </div>
+            <div className="text-[11px] text-ink-dim">
+              before the 1% network royalty
+            </div>
+          </div>
 
           <button
             onClick={onTrade}

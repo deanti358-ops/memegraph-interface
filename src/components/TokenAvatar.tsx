@@ -2,23 +2,32 @@ import { useEffect, useState } from "react";
 import { memeImageFromMemo } from "../lib/memeImage";
 
 /**
- * Token avatar. If the meme's artwork was recorded on the HCS claims topic
- * (see lib/memeImage.ts) it is shown; otherwise falls back to a stable
- * emoji + gradient derived from the token's address. All avatars on a page
- * share one topic scan via the module-level cache.
+ * Token artwork, in priority order:
+ * 1. The meme's real uploaded image, recorded on the HCS claims topic (see
+ *    lib/memeImage.ts) — e.g. a creator's actual photo/artwork.
+ * 2. A curated illustration for known demo tokens (public/token-art/*.png —
+ *    original artwork, not reproductions of any copyrighted character).
+ * 3. A deterministic pick from a generic illustration set, keyed by address,
+ *    so any token still gets a distinct, non-placeholder-looking icon.
+ *
+ * All avatars on a page share one topic scan via the module-level cache in
+ * memeImage.ts.
  */
 
 const CURATED: Record<string, string> = {
-  MGTEST: "🧪",
-  GRUMP: "😾",
-  HDOGE: "🐕",
-  PEPEH: "🐸",
-  MOONH: "🌙",
-  WLAMBO: "🏎️",
-  HAMST: "🐹",
+  MGTEST: "mgtest",
+  GRUMP: "grump",
+  HDOGE: "hdoge",
+  MOONH: "moonh",
+  WLAMBO: "wlambo",
+  HAMST: "hamst",
 };
 
-const FALLBACK = ["🚀", "🔥", "💎", "🦍", "🐳", "🎩", "👑", "🍕", "🤖", "🌵", "🦆", "🍄"];
+const FALLBACK = ["rocket", "diamond", "crown", "alien"];
+
+function artUrl(name: string): string {
+  return `/token-art/${name}.png`;
+}
 
 function hash(s: string): number {
   let h = 0;
@@ -31,20 +40,30 @@ export default function TokenAvatar({
   address,
   memo,
   size = 34,
+  rounded = true,
+  fill = false,
 }: {
   symbol?: string;
   address?: string;
   /** token memeMemo (hcs:topic/seq) — enables the on-chain image lookup */
   memo?: string;
   size?: number;
+  /** false renders a square (rounded corners) instead of a circle — use for
+      the large hero image on cards, matching a "coin logo" rather than a
+      profile-picture avatar. */
+  rounded?: boolean;
+  /** stretch to 100% of the parent (an aspect-ratio container controls the
+      actual size) instead of using the `size` prop for fixed pixel dims. */
+  fill?: boolean;
 }) {
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [onChainUrl, setOnChainUrl] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
+    setOnChainUrl(null);
     if (memo?.startsWith("hcs:")) {
       memeImageFromMemo(memo)
-        .then((url) => alive && url && setImageUrl(url))
+        .then((url) => alive && url && setOnChainUrl(url))
         .catch(() => {});
     }
     return () => {
@@ -52,35 +71,23 @@ export default function TokenAvatar({
     };
   }, [memo]);
 
-  if (imageUrl) {
-    return (
-      <img
-        className="token-avatar"
-        src={imageUrl}
-        alt=""
-        width={size}
-        height={size}
-        style={{ width: size, height: size, objectFit: "cover" }}
-      />
-    );
-  }
-
   const h = hash((address ?? symbol ?? "?").toLowerCase());
-  const emoji = (symbol && CURATED[symbol]) || FALLBACK[h % FALLBACK.length];
-  const hue1 = h % 360;
-  const hue2 = (hue1 + 70) % 360;
+  const curated = symbol ? CURATED[symbol] : undefined;
+  const src = onChainUrl ?? artUrl(curated ?? FALLBACK[h % FALLBACK.length]);
+
   return (
-    <span
+    <img
       className="token-avatar"
-      aria-hidden
+      src={src}
+      alt=""
+      width={fill ? undefined : size}
+      height={fill ? undefined : size}
       style={{
-        width: size,
-        height: size,
-        fontSize: Math.round(size * 0.52),
-        background: `linear-gradient(135deg, hsl(${hue1} 70% 45%), hsl(${hue2} 70% 30%))`,
+        width: fill ? "100%" : size,
+        height: fill ? "100%" : size,
+        objectFit: "cover",
+        borderRadius: rounded ? "50%" : fill ? 0 : `${Math.max(6, size * 0.18)}px`,
       }}
-    >
-      {emoji}
-    </span>
+    />
   );
 }

@@ -1,5 +1,4 @@
 import { Link } from "react-router-dom";
-import { Radio } from "lucide-react";
 import TokenAvatar from "./TokenAvatar";
 import { fmtHbar } from "../lib/memegraph";
 import type { RecentTrade } from "../lib/stats";
@@ -60,11 +59,6 @@ export default function LiveTicker({
 
   return (
     <div className="relative flex min-w-0 items-center overflow-hidden border-b border-hairline bg-surface/50 backdrop-blur-md">
-      <div className="z-10 flex shrink-0 items-center gap-1.5 border-r border-hairline bg-panel/80 px-3 py-2 text-[11px] font-bold tracking-wider text-neon-cyan uppercase">
-        <Radio size={13} className="animate-pulse-dot" />
-        <span className="hidden sm:inline">Live</span>
-      </div>
-
       {has ? (
         <div className="flex min-w-full animate-marquee hover:[animation-play-state:paused]">
           {track.map((t, i) => (
@@ -77,6 +71,7 @@ export default function LiveTicker({
         </div>
       )}
 
+      <div className="pointer-events-none absolute left-0 top-0 h-full w-10 bg-gradient-to-r from-surface to-transparent" />
       <div className="pointer-events-none absolute right-0 top-0 h-full w-16 bg-gradient-to-l from-obsidian to-transparent" />
     </div>
   );
