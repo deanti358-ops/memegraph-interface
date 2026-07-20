@@ -11,7 +11,6 @@ const NAV = [
   { to: "/", label: "Market", end: true },
   { to: "/launch", label: "Launchpad" },
   { to: "/creators", label: "Creators" },
-  { to: "/whitepaper", label: "Docs" },
 ];
 
 function NetworkBadge() {
@@ -31,6 +30,7 @@ function ThemeToggle() {
     (document.documentElement.dataset.theme as Theme) ?? "dark"
   );
   const next = theme === "dark" ? "light" : "dark";
+  const isDark = theme === "dark";
   return (
     <button
       onClick={() => {
@@ -39,9 +39,36 @@ function ThemeToggle() {
       }}
       title={`Switch to ${next} mode`}
       aria-label={`Switch to ${next} mode`}
-      className="grid h-9 w-9 place-items-center rounded-xl border border-hairline bg-surface/70 text-ink backdrop-blur-md transition-all duration-200 hover:border-neon-purple hover:text-ink-bright"
+      aria-pressed={isDark}
+      className="relative h-8 w-14 shrink-0 rounded-full border border-hairline bg-surface/70 backdrop-blur-md transition-colors duration-300"
     >
-      {theme === "dark" ? <Moon size={16} /> : <Sun size={16} />}
+      {/* track icons */}
+      <Sun
+        size={13}
+        className={`absolute left-1.5 top-1/2 -translate-y-1/2 transition-opacity duration-300 ${
+          isDark ? "text-ink-dim opacity-40" : "text-amber-400 opacity-100"
+        }`}
+      />
+      <Moon
+        size={13}
+        className={`absolute right-1.5 top-1/2 -translate-y-1/2 transition-opacity duration-300 ${
+          isDark ? "text-neon-cyan opacity-100" : "text-ink-dim opacity-40"
+        }`}
+      />
+      {/* sliding knob — animate `left` (not composited) so the slide is
+          smooth and unambiguous */}
+      <span
+        style={{ left: isDark ? "28px" : "2px" }}
+        className="absolute top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full bg-gradient-to-br from-neon-purple to-neon-pink text-white shadow-md transition-[left] duration-300 ease-out"
+      >
+        <span
+          className={`transition-transform duration-500 ${
+            isDark ? "rotate-0" : "rotate-180"
+          }`}
+        >
+          {isDark ? <Moon size={13} /> : <Sun size={13} />}
+        </span>
+      </span>
     </button>
   );
 }
