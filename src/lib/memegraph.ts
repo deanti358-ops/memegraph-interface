@@ -136,6 +136,34 @@ export function tokenEntityId(evmAddress: string): string {
   return `0.0.${BigInt(evmAddress)}`;
 }
 
+const accountIdCache = new Map<string, string>();
+
+/**
+ * EVM address → native Hedera account id (0.0.x). Long-zero addresses
+ * encode the id directly; alias addresses resolve via the mirror node.
+ */
+export async function hederaAccountId(
+  evmAddress: string
+): Promise<string | null> {
+  const a = evmAddress.toLowerCase();
+  const cached = accountIdCache.get(a);
+  if (cached) return cached;
+  if (/^0x0{24}/.test(a)) {
+    const id = `0.0.${BigInt(a)}`;
+    accountIdCache.set(a, id);
+    return id;
+  }
+  try {
+    const res = await fetch(`${network.mirrorNodeUrl}/accounts/${a}`);
+    if (!res.ok) return null;
+    const d = await res.json();
+    if (d.account) accountIdCache.set(a, d.account);
+    return d.account ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Whether `account` (0.0.x or EVM address) is associated with the token.
  * Hedera accounts must be associated before they can receive an HTS token;

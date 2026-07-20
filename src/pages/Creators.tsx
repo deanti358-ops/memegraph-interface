@@ -13,6 +13,7 @@ import {
   type RecentTrade,
 } from "../lib/stats";
 import TokenAvatar from "../components/TokenAvatar";
+import CreatorId from "../components/CreatorId";
 
 function timeAgo(t: number): string {
   const s = Math.max(1, Math.floor(Date.now() / 1000 - t));
@@ -141,13 +142,7 @@ export default function Creators() {
                     </Link>
                   </td>
                   <td className="mono">
-                    <a
-                      href={hashscanAddr(t.creator)}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {shortAddr(t.creator)}
-                    </a>
+                    <CreatorId addr={t.creator} />
                   </td>
                   <td>
                     {fmtTokens(t.creatorAccrued)} {t.symbol ?? ""}

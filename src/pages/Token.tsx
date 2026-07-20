@@ -21,6 +21,7 @@ import {
 import { DEFAULT_SLIPPAGE_BPS, network } from "../config";
 import PriceChart from "../components/PriceChart";
 import TokenAvatar from "../components/TokenAvatar";
+import CreatorId from "../components/CreatorId";
 import { fetchPriceHistory, type PricePoint } from "../lib/priceHistory";
 
 type Details = MemeInfo & {
@@ -270,7 +271,7 @@ export default function Token() {
             <div className="muted mono">
               token <a href={hashscanAddr(d.token)} target="_blank" rel="noreferrer">{shortAddr(d.token)}</a>
               {" · "}pool <a href={hashscanAddr(d.pool)} target="_blank" rel="noreferrer">{shortAddr(d.pool)}</a>
-              {" · "}creator <a href={hashscanAddr(d.creator)} target="_blank" rel="noreferrer">{shortAddr(d.creator)}</a>
+              {" · "}creator <CreatorId addr={d.creator} />
             </div>
           </div>
         </div>

@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, NavLink, Route, Routes } from "react-router-dom";
 import { useWallet } from "./lib/wallet";
-import { shortAddr } from "./lib/memegraph";
+import { hederaAccountId, shortAddr } from "./lib/memegraph";
 import { network, ACTIVE_NETWORK, CONTACT_EMAIL, SOCIALS } from "./config";
 import { applyTheme, type Theme } from "./lib/theme";
 import Home from "./pages/Home";
@@ -91,6 +91,17 @@ function ConnectButton() {
     disconnect,
   } = useWallet();
   const [open, setOpen] = useState(false);
+  const [nativeId, setNativeId] = useState<string | null>(null);
+
+  // Always show the Hedera-native account id, even for EVM wallets
+  useEffect(() => {
+    setNativeId(null);
+    if (displayAccount?.startsWith("0x")) {
+      hederaAccountId(displayAccount)
+        .then(setNativeId)
+        .catch(() => {});
+    }
+  }, [displayAccount]);
 
   if (displayAccount) {
     return (
@@ -100,7 +111,7 @@ function ConnectButton() {
         title={`Connected via ${kind === "hashpack" ? "HashPack" : "MetaMask"} — click to disconnect`}
       >
         {displayAccount.startsWith("0x")
-          ? shortAddr(displayAccount)
+          ? nativeId ?? shortAddr(displayAccount)
           : displayAccount}
       </button>
     );

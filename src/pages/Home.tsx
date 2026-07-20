@@ -4,6 +4,7 @@ import { fmtHbar, fmtPrice, fmtTokens, fmtUsd, shortAddr } from "../lib/memegrap
 import { fetchNetworkStats, type TokenStats } from "../lib/stats";
 import { network } from "../config";
 import TokenAvatar from "../components/TokenAvatar";
+import CreatorId from "../components/CreatorId";
 
 type SortKey = "price" | "changePct" | "hbarReserve" | "volumeTinybar" | "trades";
 
@@ -134,7 +135,7 @@ export default function Home() {
                 <span className="token-symbol">{topPerformer.symbol ?? ""}</span>
               </div>
               <div className="muted small mono">
-                by {shortAddr(topPerformer.creator)}
+                by <CreatorId addr={topPerformer.creator} link={false} />
               </div>
             </div>
           </div>
