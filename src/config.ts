@@ -31,6 +31,12 @@ export const LAUNCH_VALUE_HBAR = "50";
 /** Default slippage tolerance (bps) — generous because of the 1% network royalty. */
 export const DEFAULT_SLIPPAGE_BPS = 300;
 
+/** Creator royalties vest linearly over this many days (factory immutable). */
+export const VESTING_DAYS = 90;
+
+/** Fixed supply minted for every meme token. */
+export const TOKEN_SUPPLY = 1_000_000_000;
+
 /** HCS topic holding meme provenance claims (see api/claim.ts). */
 export const CLAIMS_TOPIC_ID = "0.0.9638085";
 

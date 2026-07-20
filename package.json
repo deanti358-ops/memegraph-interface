@@ -11,13 +11,16 @@
   },
   "dependencies": {
     "@hashgraph/sdk": "^2.41.0",
+    "@tailwindcss/vite": "^4.3.3",
     "bignumber.js": "^9.1.1",
     "buffer": "^6.0.3",
     "ethers": "^6.17.0",
     "hashconnect": "^3.0.14",
+    "lucide-react": "^1.25.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "react-router-dom": "^7.18.1"
+    "react-router-dom": "^7.18.1",
+    "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
     "@types/node": "^24.13.2",

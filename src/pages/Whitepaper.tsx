@@ -6,7 +6,7 @@ import { network, CONTACT_EMAIL } from "../config";
  */
 export default function Whitepaper() {
   return (
-    <div className="page whitepaper">
+    <div className="whitepaper mx-auto max-w-3xl rounded-2xl border border-hairline bg-panel/50 p-6 backdrop-blur-xl sm:p-9">
       <h1>Memegraph Whitepaper</h1>
       <p className="muted">v1.0 · July 2026 · Hedera testnet</p>
 

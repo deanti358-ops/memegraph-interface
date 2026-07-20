@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { parseUnits } from "ethers";
+import { ShieldCheck, ShieldX, ExternalLink, Droplets, FileText, Clock, Coins, Lock } from "lucide-react";
 import { useWallet } from "../lib/wallet";
 import {
   factoryRead,
@@ -71,12 +72,23 @@ function ChartWindow({
   }
   if (visible.length < 2) {
     return (
-      <div className="muted small">
+      <div className="py-8 text-center text-sm text-ink-dim">
         No trades in this window — pick a longer timeframe.
       </div>
     );
   }
   return <PriceChart points={visible} symbol={symbol} />;
+}
+
+function StatRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-hairline py-2.5 last:border-b-0">
+      <dt className="text-xs font-semibold text-ink-dim">{label}</dt>
+      <dd className="m-0 text-right font-mono text-sm font-bold text-ink-bright">
+        {children}
+      </dd>
+    </div>
+  );
 }
 
 export default function Token() {
@@ -253,45 +265,69 @@ export default function Token() {
 
   if (!d) {
     return (
-      <div className="page">
-        {error ? <div className="error">{error}</div> : <div className="muted">Loading…</div>}
+      <div className="py-16 text-center">
+        {error ? (
+          <div className="mx-auto max-w-md rounded-xl border border-neon-red/40 bg-neon-red/5 px-4 py-3 text-sm text-neon-red">
+            {error}
+          </div>
+        ) : (
+          <div className="text-ink-dim">Loading…</div>
+        )}
       </div>
     );
   }
 
   return (
-    <div className="page">
-      <div className="token-header">
-        <div className="token-cell">
+    <div>
+      {/* ---------- header ---------- */}
+      <div className="mb-4 flex flex-col gap-4 rounded-2xl border border-hairline bg-panel/50 p-5 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3.5">
           <TokenAvatar symbol={d.symbol} address={d.token} memo={d.memeMemo} size={56} />
-          <div>
-            <h1>
-              {d.name ?? "…"} <span className="token-symbol big">{d.symbol ?? ""}</span>
+          <div className="min-w-0">
+            <h1 className="truncate font-display text-2xl font-bold text-ink-bright">
+              {d.name ?? "…"}{" "}
+              <span className="font-mono text-base font-bold text-neon-cyan">
+                ${d.symbol ?? ""}
+              </span>
             </h1>
-            <div className="muted mono">
-              token <a href={hashscanAddr(d.token)} target="_blank" rel="noreferrer">{shortAddr(d.token)}</a>
-              {" · "}pool <a href={hashscanAddr(d.pool)} target="_blank" rel="noreferrer">{shortAddr(d.pool)}</a>
-              {" · "}creator <CreatorId addr={d.creator} />
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-xs text-ink-dim">
+              <a href={hashscanAddr(d.token)} target="_blank" rel="noreferrer" className="hover:text-neon-cyan">
+                token {shortAddr(d.token)}
+              </a>
+              <span>·</span>
+              <a href={hashscanAddr(d.pool)} target="_blank" rel="noreferrer" className="hover:text-neon-cyan">
+                pool {shortAddr(d.pool)}
+              </a>
+              <span>·</span>
+              <span>
+                creator <CreatorId addr={d.creator} />
+              </span>
             </div>
           </div>
         </div>
-        <div className="price-tag">
-          <div className="price">{fmtPrice(d.price)} ℏ</div>
-          <div className="muted">
+        <div className="shrink-0 text-right">
+          <div className="font-mono text-2xl font-bold text-ink-bright">
+            {fmtPrice(d.price)} <span className="text-base text-ink-dim">ℏ</span>
+          </div>
+          <div className="text-xs text-ink-dim">
             {hbarUsd !== null
               ? `${fmtUsd((Number(d.price) / 1e18) * hbarUsd)} per token`
               : "per token"}
           </div>
           {hbarUsd !== null && (
-            <div className="muted small">
+            <div className="text-xs text-ink-dim">
               mkt cap {fmtUsd((Number(d.price) / 1e18) * 1e9 * hbarUsd)}
             </div>
           )}
         </div>
       </div>
 
+      {/* ---------- safety badges ---------- */}
       {d.safety && (
-        <div className="safety-row" title="Verified live from the Hedera mirror node — not self-reported">
+        <div
+          className="mb-4 flex flex-wrap gap-2"
+          title="Verified live from the Hedera mirror node — not self-reported"
+        >
           {[
             { ok: d.safety.noAdminKey, label: "No admin key" },
             { ok: d.safety.noFeeScheduleKey, label: "Royalty immutable" },
@@ -299,79 +335,99 @@ export default function Token() {
             { ok: d.safety.noPauseOrFreeze, label: "No pause/freeze/wipe" },
             { ok: true, label: "Permanent liquidity" },
           ].map((b) => (
-            <span key={b.label} className={b.ok ? "safety-badge ok" : "safety-badge bad"}>
-              {b.ok ? "✓" : "✗"} {b.label}
+            <span
+              key={b.label}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold backdrop-blur-md ${
+                b.ok
+                  ? "border-neon-green/30 bg-neon-green/10 text-neon-green"
+                  : "border-neon-red/30 bg-neon-red/10 text-neon-red"
+              }`}
+            >
+              {b.ok ? <ShieldCheck size={12} /> : <ShieldX size={12} />}
+              {b.label}
             </span>
           ))}
         </div>
       )}
 
-      <section className="panel chart-panel">
-        <h2>Price · ℏ per {d.symbol ?? "token"}</h2>
-        <div className="tf-row" role="group" aria-label="Chart timeframe">
-          {TIMEFRAMES.map((tf) => (
-            <button
-              key={tf.label}
-              className={timeframe === tf.seconds ? "tf-btn active" : "tf-btn"}
-              onClick={() => setTimeframe(tf.seconds)}
-            >
-              {tf.label}
-            </button>
-          ))}
+      {/* ---------- chart ---------- */}
+      <section className="mb-4 rounded-2xl border border-hairline bg-panel/50 p-5 backdrop-blur-xl">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="font-display text-sm font-bold text-ink-bright">
+            Price · ℏ per {d.symbol ?? "token"}
+          </h2>
+          <div
+            className="flex gap-1 overflow-x-auto rounded-xl border border-hairline bg-surface/60 p-1"
+            role="group"
+            aria-label="Chart timeframe"
+          >
+            {TIMEFRAMES.map((tf) => (
+              <button
+                key={tf.label}
+                onClick={() => setTimeframe(tf.seconds)}
+                className={`shrink-0 rounded-lg px-2.5 py-1 font-mono text-xs font-bold transition-all duration-200 ${
+                  timeframe === tf.seconds
+                    ? "bg-gradient-to-r from-neon-purple to-neon-pink text-white"
+                    : "text-ink-dim hover:text-ink-bright"
+                }`}
+              >
+                {tf.label}
+              </button>
+            ))}
+          </div>
         </div>
         {history === null ? (
-          <div className="muted small">Loading trade history…</div>
+          <div className="py-8 text-center text-sm text-ink-dim">Loading trade history…</div>
         ) : (
-          <ChartWindow
-            points={history}
-            windowSec={timeframe}
-            symbol={d.symbol ?? "token"}
-          />
+          <ChartWindow points={history} windowSec={timeframe} symbol={d.symbol ?? "token"} />
         )}
       </section>
 
-      <div className="token-layout">
-        <section className="panel">
-          <h2>Trade</h2>
-          <div className="tabs">
-            <button
-              className={tab === "buy" ? "tab active" : "tab"}
-              onClick={() => {
-                setTab("buy");
-                setAmount("");
-              }}
-            >
-              Buy
-            </button>
-            <button
-              className={tab === "sell" ? "tab active" : "tab"}
-              onClick={() => {
-                setTab("sell");
-                setAmount("");
-              }}
-            >
-              Sell
-            </button>
+      {/* ---------- trade + stats ---------- */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <section className="rounded-2xl border border-hairline bg-panel/50 p-5 backdrop-blur-xl">
+          <h2 className="mb-3 font-display text-sm font-bold text-ink-bright">Trade</h2>
+
+          <div className="mb-3 flex gap-1 rounded-xl border border-hairline bg-surface/60 p-1">
+            {(["buy", "sell"] as const).map((k) => (
+              <button
+                key={k}
+                onClick={() => {
+                  setTab(k);
+                  setAmount("");
+                }}
+                className={`flex-1 rounded-lg py-2 text-sm font-bold capitalize transition-all duration-200 ${
+                  tab === k
+                    ? k === "buy"
+                      ? "bg-neon-green/15 text-neon-green"
+                      : "bg-neon-red/15 text-neon-red"
+                    : "text-ink-dim hover:text-ink-bright"
+                }`}
+              >
+                {k}
+              </button>
+            ))}
           </div>
 
-          <label className="amount-label">
+          <label className="mb-1 block text-xs font-semibold text-ink-dim">
             {tab === "buy" ? "Spend (HBAR)" : `Sell (${d.symbol ?? "tokens"})`}
-            <input
-              type="number"
-              min="0"
-              step="any"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="0.0"
-            />
           </label>
+          <input
+            type="number"
+            min="0"
+            step="any"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="0.0"
+            className="w-full rounded-xl border border-hairline bg-surface/60 px-3.5 py-2.5 font-mono text-base text-ink-bright outline-none transition-all duration-200 placeholder:text-ink-dim focus:border-neon-cyan focus:shadow-[0_0_16px_-6px_var(--color-neon-cyan)]"
+          />
 
           {tab === "sell" && balance !== null && (
-            <div className="muted small">
+            <div className="mt-2 text-xs text-ink-dim">
               Balance: {fmtTokens(balance)} {d.symbol}{" "}
               <button
-                className="link"
                 onClick={() => setAmount((Number(balance) / 10 ** TOKEN_DECIMALS).toString())}
+                className="font-semibold text-neon-cyan hover:underline"
               >
                 max
               </button>
@@ -379,97 +435,101 @@ export default function Token() {
           )}
 
           {quote !== null && (
-            <div className="quote">
+            <div className="mt-3 rounded-xl border border-hairline bg-surface/40 px-3.5 py-2.5 font-mono text-sm text-ink-bright">
               ≈ {tab === "buy" ? `${fmtTokens(quote)} ${d.symbol ?? ""}` : `${fmtHbar(quote, 4)} ℏ`}
-              <span className="muted small">
-                {" "}
+              <div className="mt-0.5 font-sans text-xs font-normal text-ink-dim">
                 before the 1% network royalty · slippage {DEFAULT_SLIPPAGE_BPS / 100}%
-              </span>
+              </div>
             </div>
           )}
 
-          <button className="btn btn-primary wide" onClick={onTrade} disabled={busy}>
-            {busy
-              ? "Working…"
-              : !displayAccount
-              ? "Connect wallet"
-              : tab === "buy"
-              ? "Buy"
-              : "Sell"}
+          <button
+            onClick={onTrade}
+            disabled={busy}
+            className={`mt-4 w-full rounded-xl py-3 text-sm font-bold text-white transition-all duration-200 disabled:opacity-50 ${
+              tab === "buy"
+                ? "bg-gradient-to-r from-neon-green to-neon-cyan shadow-[0_0_20px_-8px_var(--color-neon-green)] hover:scale-[1.02]"
+                : "bg-gradient-to-r from-neon-red to-neon-pink shadow-[0_0_20px_-8px_var(--color-neon-red)] hover:scale-[1.02]"
+            }`}
+          >
+            {busy ? "Working…" : !displayAccount ? "Connect wallet" : tab === "buy" ? "Buy" : "Sell"}
           </button>
 
-          {status && <div className="status">{status}</div>}
-          {error && <div className="error">{error}</div>}
+          {status && <div className="mt-3 text-sm font-semibold text-neon-green">{status}</div>}
+          {error && <div className="mt-3 text-sm text-neon-red">{error}</div>}
         </section>
 
-        <section className="panel">
-          <h2>Token</h2>
-          <dl className="stat-list">
-            <div>
-              <dt>Pool liquidity</dt>
-              <dd>
+        <section className="rounded-2xl border border-hairline bg-panel/50 p-5 backdrop-blur-xl">
+          <h2 className="mb-2 font-display text-sm font-bold text-ink-bright">Token</h2>
+          <dl className="m-0">
+            <StatRow label="Pool liquidity">
+              <span className="inline-flex items-center gap-1.5">
+                <Droplets size={13} className="text-neon-cyan" />
                 {fmtHbar(d.hbarReserve)} ℏ / {fmtTokens(d.tokenReserve)} {d.symbol}
-              </dd>
-            </div>
-            <div>
-              <dt>Provenance</dt>
-              <dd className="mono small">
-                {d.memeMemo.startsWith("hcs:") ? (
-                  <a
-                    href={`${network.hashscanUrl}/topic/${d.memeMemo.slice(4).split("/")[0]}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    title="Immutable claim record on the Hedera Consensus Service"
-                  >
-                    {d.memeMemo}
-                  </a>
-                ) : (
-                  d.memeMemo || "—"
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt>Launched</dt>
-              <dd>{new Date(d.launchedAt * 1000).toLocaleString()}</dd>
-            </div>
-            <div>
-              <dt>Undistributed royalties</dt>
-              <dd>
+              </span>
+            </StatRow>
+            <StatRow label="Provenance">
+              {d.memeMemo.startsWith("hcs:") ? (
+                <a
+                  href={`${network.hashscanUrl}/topic/${d.memeMemo.slice(4).split("/")[0]}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="Immutable claim record on the Hedera Consensus Service"
+                  className="inline-flex items-center gap-1.5 text-neon-cyan hover:underline"
+                >
+                  <FileText size={13} />
+                  {d.memeMemo}
+                  <ExternalLink size={11} />
+                </a>
+              ) : (
+                d.memeMemo || "—"
+              )}
+            </StatRow>
+            <StatRow label="Launched">
+              <span className="inline-flex items-center gap-1.5">
+                <Clock size={13} className="text-ink-dim" />
+                {new Date(d.launchedAt * 1000).toLocaleString()}
+              </span>
+            </StatRow>
+            <StatRow label="Undistributed royalties">
+              <span className="inline-flex items-center gap-1.5">
+                <Coins size={13} className="text-neon-purple" />
                 {fmtTokens(d.pending)} {d.symbol}
-              </dd>
-            </div>
-            <div>
-              <dt>Creator vesting</dt>
-              <dd>
-                {fmtTokens(d.vestAccrued - d.vestClaimed)} {d.symbol} locked ·{" "}
-                {fmtTokens(d.vestClaimable)} claimable
-              </dd>
-            </div>
+              </span>
+            </StatRow>
+            <StatRow label="Creator vesting">
+              <span className="inline-flex items-center gap-1.5">
+                <Lock size={13} className="text-neon-pink" />
+                {fmtTokens(d.vestAccrued - d.vestClaimed)} locked · {fmtTokens(d.vestClaimable)} claimable
+              </span>
+            </StatRow>
           </dl>
 
-          <button
-            className="btn wide"
-            onClick={onDistribute}
-            disabled={busy || d.pending === 0n}
-            title="Anyone can trigger — protocol and pool pay out now, the creator share starts vesting"
-          >
-            Distribute royalties
-          </button>
-          <button
-            className="btn wide"
-            onClick={onClaimCreator}
-            disabled={busy || d.vestClaimable === 0n}
-            title="Anyone can trigger — pays the creator everything vested so far"
-          >
-            Pay creator vested royalties
-          </button>
+          <div className="mt-4 flex flex-col gap-2">
+            <button
+              onClick={onDistribute}
+              disabled={busy || d.pending === 0n}
+              title="Anyone can trigger — protocol and pool pay out now, the creator share starts vesting"
+              className="w-full rounded-xl border border-hairline bg-surface/60 py-2.5 text-sm font-bold text-ink transition-all duration-200 hover:border-neon-purple hover:text-ink-bright disabled:cursor-default disabled:opacity-40 disabled:hover:border-hairline disabled:hover:text-ink"
+            >
+              Distribute royalties
+            </button>
+            <button
+              onClick={onClaimCreator}
+              disabled={busy || d.vestClaimable === 0n}
+              title="Anyone can trigger — pays the creator everything vested so far"
+              className="w-full rounded-xl border border-hairline bg-surface/60 py-2.5 text-sm font-bold text-ink transition-all duration-200 hover:border-neon-pink hover:text-ink-bright disabled:cursor-default disabled:opacity-40 disabled:hover:border-hairline disabled:hover:text-ink"
+            >
+              Pay creator vested royalties
+            </button>
+          </div>
 
-          <p className="muted small">
-            1% of every transfer is collected by the network itself. Payouts
-            split 0.4% creator / 0.4% protocol / 0.2% pool; the creator share
-            vests linearly over 90 days from launch, so dumping early forfeits
-            the upside. The token has no admin, supply, pause, or fee keys —
-            nothing about it can ever be changed.
+          <p className="mt-4 text-xs leading-relaxed text-ink-dim">
+            1% of every transfer is collected by the network itself. Payouts split
+            0.4% creator / 0.4% protocol / 0.2% pool; the creator share vests
+            linearly over 90 days from launch, so dumping early forfeits the
+            upside. The token has no admin, supply, pause, or fee keys — nothing
+            about it can ever be changed.
           </p>
         </section>
       </div>

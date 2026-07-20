@@ -1,3 +1,56 @@
+/* Legacy hand-written CSS sits in its own layer *before* Tailwind's
+   utilities, so utility classes always win. Without this, unlayered legacy
+   rules (e.g. our old `.grid`) silently override every Tailwind utility. */
+@layer theme, base, components, legacy, utilities;
+
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   Memegraph design tokens — obsidian/cyberpunk. Exposed to Tailwind as
+   utilities (bg-panel, text-neon-cyan, font-display, …) via @theme.
+   --------------------------------------------------------------------------- */
+@theme {
+  --color-obsidian: #08060f;
+  --color-surface: #0f0b1c;
+  --color-panel: #161029;
+  --color-hairline: #2a2140;
+  --color-ink: #b9b3cc;
+  --color-ink-dim: #837c99;
+  --color-ink-bright: #f7f5fc;
+
+  --color-neon-purple: #a34bff;
+  --color-neon-pink: #ff3ec8;
+  --color-neon-cyan: #33e6dd;
+  --color-neon-green: #3ef2a0;
+  --color-neon-red: #ff5c7a;
+
+  --font-display: "Kanit", system-ui, sans-serif;
+  --font-mono: "Space Grotesk", ui-monospace, Consolas, monospace;
+
+  --animate-marquee: marquee 42s linear infinite;
+  --animate-pulse-dot: pulse-dot 2.4s ease-in-out infinite;
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+
+@layer legacy {
 :root {
   --bg: #0d0a18;
   --bg-raised: #141023;
@@ -47,6 +100,21 @@
   --red: #dc2626;
   --chart-series: #7c3aed;
   --chart-grid: #eceaf2;
+
+  /* Tailwind design tokens re-pointed for light mode — every bg-surface /
+     text-ink / border-hairline utility follows automatically. */
+  --color-obsidian: #f8f7fb;
+  --color-surface: #ffffff;
+  --color-panel: #ffffff;
+  --color-hairline: #e6e2ef;
+  --color-ink: #4a4458;
+  --color-ink-dim: #746d85;
+  --color-ink-bright: #17131f;
+  --color-neon-purple: #7c3aed;
+  --color-neon-pink: #db2777;
+  --color-neon-cyan: #0891b2;
+  --color-neon-green: #16a34a;
+  --color-neon-red: #dc2626;
 
   color-scheme: light;
   background:
@@ -987,4 +1055,6 @@ input:focus {
 }
 .whitepaper table {
   margin-top: 0.6rem;
+}
+
 }
