@@ -6,26 +6,28 @@
 @import "tailwindcss";
 
 /* ---------------------------------------------------------------------------
-   Memegraph design tokens — obsidian/cyberpunk. Exposed to Tailwind as
-   utilities (bg-panel, text-neon-cyan, font-display, …) via @theme.
+   Memegraph design tokens — zinc-950 dark theme with a violet→blue accent,
+   modelled on the somnia.meme aesthetic (shadcn zinc + Inter). Token *names*
+   are kept (neon-*) so components need no churn; only the values change to a
+   calmer, more professional palette.
    --------------------------------------------------------------------------- */
 @theme {
-  --color-obsidian: #08060f;
-  --color-surface: #0f0b1c;
-  --color-panel: #161029;
-  --color-hairline: #2a2140;
-  --color-ink: #b9b3cc;
-  --color-ink-dim: #837c99;
-  --color-ink-bright: #f7f5fc;
+  --color-obsidian: #09090b; /* page background — zinc-950 */
+  --color-surface: #101013; /* inputs / subtle fills */
+  --color-panel: #0f0f12; /* cards */
+  --color-hairline: #27272a; /* borders — zinc-800 */
+  --color-ink: #a1a1aa; /* zinc-400 */
+  --color-ink-dim: #71717a; /* zinc-500 */
+  --color-ink-bright: #fafafa; /* zinc-50 */
 
-  --color-neon-purple: #a34bff;
-  --color-neon-pink: #ff3ec8;
-  --color-neon-cyan: #33e6dd;
-  --color-neon-green: #3ef2a0;
-  --color-neon-red: #ff5c7a;
+  --color-neon-purple: #8b5cf6; /* violet-500 — primary accent */
+  --color-neon-pink: #3b82f6; /* blue-500 — gradient partner (violet→blue) */
+  --color-neon-cyan: #60a5fa; /* blue-400 — secondary accent */
+  --color-neon-green: #22c55e; /* gains */
+  --color-neon-red: #ef4444; /* losses */
 
-  --font-display: "Kanit", system-ui, sans-serif;
-  --font-mono: "Space Grotesk", ui-monospace, Consolas, monospace;
+  --font-display: "Inter", system-ui, sans-serif;
+  --font-mono: "Inter", system-ui, sans-serif;
 
   --animate-marquee: marquee 42s linear infinite;
   --animate-pulse-dot: pulse-dot 2.4s ease-in-out infinite;
@@ -52,38 +54,35 @@
 
 @layer legacy {
 :root {
-  --bg: #0d0a18;
-  --bg-raised: #141023;
-  --bg-panel: #1a142e;
-  --border: #2c2347;
-  --text: #b9b3cc;
-  --text-dim: #837c99;
-  --text-bright: #f7f5fc;
-  --pink: #ff3ec8;
-  --cyan: #33e6dd;
-  --grad: linear-gradient(92deg, var(--pink), var(--cyan));
+  --bg: #09090b;
+  --bg-raised: #101013;
+  --bg-panel: #0f0f12;
+  --border: #27272a;
+  --text: #a1a1aa;
+  --text-dim: #71717a;
+  --text-bright: #fafafa;
+  --pink: #3b82f6;
+  --cyan: #60a5fa;
+  --grad: linear-gradient(92deg, #8b5cf6, #3b82f6);
   --grad-soft: linear-gradient(
     92deg,
-    rgba(255, 62, 200, 0.12),
-    rgba(51, 230, 221, 0.12)
+    rgba(139, 92, 246, 0.12),
+    rgba(59, 130, 246, 0.12)
   );
-  --glow-purple: #b18aff;
-  --green: #4ade80;
-  --red: #f87171;
+  --glow-purple: #8b5cf6;
+  --green: #22c55e;
+  --red: #ef4444;
   /* chart series colors are theme-specific and validated (dataviz checks) */
-  --chart-series: #9a6bff;
-  --chart-grid: #251d3d;
-  --mono: "Space Grotesk", ui-monospace, Consolas, monospace;
-  --sans: system-ui, "Segoe UI", Roboto, sans-serif;
-  --display: "Kanit", system-ui, sans-serif;
+  --chart-series: #8b5cf6;
+  --chart-grid: #1e1e22;
+  --mono: "Inter", system-ui, sans-serif;
+  --sans: "Inter", system-ui, "Segoe UI", Roboto, sans-serif;
+  --display: "Inter", system-ui, sans-serif;
 
   color-scheme: dark;
   font: 16px/1.55 var(--sans);
   color: var(--text);
-  background:
-    radial-gradient(1200px 500px at 80% -10%, rgba(255, 62, 200, 0.08), transparent 60%),
-    radial-gradient(900px 500px at 10% 0%, rgba(51, 230, 221, 0.07), transparent 55%),
-    var(--bg);
+  background: var(--bg);
   background-attachment: fixed;
 }
 
@@ -111,16 +110,13 @@
   --color-ink-dim: #746d85;
   --color-ink-bright: #17131f;
   --color-neon-purple: #7c3aed;
-  --color-neon-pink: #db2777;
-  --color-neon-cyan: #0891b2;
+  --color-neon-pink: #2563eb;
+  --color-neon-cyan: #3b82f6;
   --color-neon-green: #16a34a;
   --color-neon-red: #dc2626;
 
   color-scheme: light;
-  background:
-    radial-gradient(1200px 500px at 80% -10%, rgba(255, 62, 200, 0.06), transparent 60%),
-    radial-gradient(900px 500px at 10% 0%, rgba(51, 230, 221, 0.05), transparent 55%),
-    var(--bg);
+  background: var(--bg);
   background-attachment: fixed;
 }
 
