@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { formatEther, parseUnits } from "ethers";
-import { ShieldCheck, ShieldX, ExternalLink, Droplets, FileText, Clock, Coins, Lock } from "lucide-react";
+import { ShieldCheck, ShieldX, ExternalLink, Droplets, FileText, Clock, Coins, Lock, BarChart3 } from "lucide-react";
 import { useWallet, readProvider } from "../lib/wallet";
 import {
   factoryRead,
@@ -20,10 +20,23 @@ import {
   type MemeInfo,
 } from "../lib/memegraph";
 import { DEFAULT_SLIPPAGE_BPS, network } from "../config";
-import PriceChart from "../components/PriceChart";
+import Candles from "../components/Candles";
 import TokenAvatar from "../components/TokenAvatar";
 import CreatorId from "../components/CreatorId";
+import {
+  AddressCard,
+  TransactionsPanel,
+  HoldersPanel,
+} from "../components/TokenPanels";
 import { fetchPriceHistory, type PricePoint } from "../lib/priceHistory";
+import {
+  fetchTrades,
+  toCandles,
+  fetchHolders,
+  type Trade,
+  type Holder,
+} from "../lib/tokenDetail";
+import { hederaAccountId } from "../lib/memegraph";
 
 type Details = MemeInfo & {
   price: bigint;
@@ -36,49 +49,15 @@ type Details = MemeInfo & {
   safety?: import("../lib/memegraph").MirrorTokenInfo["safety"];
 };
 
-/** Range presets — window on trailing time, All shows everything. */
-const TIMEFRAMES: { label: string; seconds: number | null }[] = [
+/** Candle bucket sizes. Each is the OHLC aggregation width for the chart. */
+const TIMEFRAMES: { label: string; seconds: number }[] = [
   { label: "1m", seconds: 60 },
-  { label: "2m", seconds: 120 },
   { label: "5m", seconds: 300 },
-  { label: "10m", seconds: 600 },
-  { label: "20m", seconds: 1200 },
+  { label: "15m", seconds: 900 },
   { label: "1h", seconds: 3600 },
-  { label: "All", seconds: null },
+  { label: "4h", seconds: 14400 },
+  { label: "1d", seconds: 86400 },
 ];
-
-/** Filters points to a trailing window **anchored to the latest trade**
-    (not wall-clock now — on a quiet pool every short window would be empty).
-    Carries in the entry price so the line starts at the left edge. */
-function ChartWindow({
-  points,
-  windowSec,
-  symbol,
-}: {
-  points: PricePoint[];
-  windowSec: number | null;
-  symbol: string;
-}) {
-  let visible = points;
-  if (windowSec !== null && points.length > 0) {
-    const anchor = points[points.length - 1].t;
-    const from = anchor - windowSec;
-    const inside = points.filter((p) => p.t >= from);
-    const before = points.filter((p) => p.t < from);
-    const carryIn = before.length
-      ? [{ ...before[before.length - 1], t: from }]
-      : [];
-    visible = [...carryIn, ...inside];
-  }
-  if (visible.length < 2) {
-    return (
-      <div className="py-8 text-center text-sm text-ink-dim">
-        No trades in this window — pick a longer timeframe.
-      </div>
-    );
-  }
-  return <PriceChart points={visible} symbol={symbol} />;
-}
 
 function StatRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -97,7 +76,10 @@ export default function Token() {
 
   const [d, setD] = useState<Details | null>(null);
   const [history, setHistory] = useState<PricePoint[] | null>(null);
-  const [timeframe, setTimeframe] = useState<number | null>(null); // seconds
+  const [trades, setTrades] = useState<Trade[] | null>(null);
+  const [holders, setHolders] = useState<Holder[] | null>(null);
+  const [holdersCount, setHoldersCount] = useState(0);
+  const [timeframe, setTimeframe] = useState<number>(3600); // candle bucket seconds
   const [hbarUsd, setHbarUsd] = useState<number | null>(null);
 
   useEffect(() => {
@@ -164,6 +146,24 @@ export default function Token() {
     fetchPriceHistory(m.pool, Number(m.launchedAt), seedPrice)
       .then(setHistory)
       .catch(() => setHistory([]));
+
+    // Transactions (pool Buy/Sell events)
+    fetchTrades(m.pool)
+      .then(setTrades)
+      .catch(() => setTrades([]));
+
+    // Holders — tag the pool as "curve" and the creator as "dev"
+    Promise.all([
+      hederaAccountId(m.pool).catch(() => null),
+      hederaAccountId(m.creator).catch(() => null),
+    ]).then(([poolId, creatorId]) =>
+      fetchHolders(m.token, poolId, creatorId)
+        .then((r) => {
+          setHolders(r.holders);
+          setHoldersCount(r.count);
+        })
+        .catch(() => setHolders([]))
+    );
   }, [id, evmAddress]);
 
   useEffect(() => {
@@ -357,11 +357,11 @@ export default function Token() {
         </div>
       )}
 
-      {/* ---------- chart ---------- */}
+      {/* ---------- price chart (candles) ---------- */}
       <section className="mb-4 rounded-2xl border border-hairline bg-panel/50 p-5 backdrop-blur-xl">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="font-display text-sm font-bold text-ink-bright">
-            Price · ℏ per {d.symbol ?? "token"}
+          <h2 className="flex items-center gap-2 font-display text-sm font-bold text-ink-bright">
+            <BarChart3 size={15} className="text-neon-purple" /> Price Chart
           </h2>
           <div
             className="flex gap-1 overflow-x-auto rounded-xl border border-hairline bg-surface/60 p-1"
@@ -384,11 +384,23 @@ export default function Token() {
           </div>
         </div>
         {history === null ? (
-          <div className="py-8 text-center text-sm text-ink-dim">Loading trade history…</div>
+          <div className="py-10 text-center text-sm text-ink-dim">Loading trade history…</div>
         ) : (
-          <ChartWindow points={history} windowSec={timeframe} symbol={d.symbol ?? "token"} />
+          <Candles candles={toCandles(history, timeframe)} />
         )}
       </section>
+
+      {/* ---------- contract / creator addresses ---------- */}
+      <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <AddressCard label="Contract" address={d.token} />
+        <AddressCard label="Creator" address={d.creator} badge="Dev" />
+      </div>
+
+      {/* ---------- transactions + holders ---------- */}
+      <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <TransactionsPanel trades={trades} hbarUsd={hbarUsd} />
+        <HoldersPanel holders={holders} count={holdersCount} symbol={d.symbol} />
+      </div>
 
       {/* ---------- trade + stats ---------- */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

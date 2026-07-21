@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
-import { Rocket, Wallet, Sun, Moon, Menu, X, ChevronDown } from "lucide-react";
+import { Rocket, Wallet, Sun, Moon, Menu, X, ShieldCheck } from "lucide-react";
 import { useWallet } from "../lib/wallet";
 import { hederaAccountId, shortAddr } from "../lib/memegraph";
 import { ACTIVE_NETWORK } from "../config";
@@ -73,6 +73,140 @@ function ThemeToggle() {
   );
 }
 
+/** Small brand-badge icons for the wallet list (generic, no exact logos). */
+function WalletBadge({ kind }: { kind: "hashpack" | "metamask" }) {
+  if (kind === "hashpack") {
+    return (
+      <span className="grid h-9 w-9 place-items-center rounded-lg bg-[#1a1a2e] text-white">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+          <path d="M5 4h3v7l4-4h3l-5 5 5 5h-3l-4-4v7H5V4z" />
+        </svg>
+      </span>
+    );
+  }
+  return (
+    <span className="grid h-9 w-9 place-items-center rounded-lg bg-[#3a2a1a] text-[#f6851b]">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+        <path d="M21 3l-7 5 1.3-3.1L21 3zM3 3l7 5L8.7 4.9 3 3zm15 12l-2 3 4 1 1-4-3 0zM2 15l1 4 4-1-2-3-3 0zm7 1l-1 2 3 1 3-1-1-2-4 0z" />
+      </svg>
+    </span>
+  );
+}
+
+function ConnectModal({
+  onClose,
+  connectHashPack,
+  connectMetaMask,
+}: {
+  onClose: () => void;
+  connectHashPack: () => void;
+  connectMetaMask: () => void;
+}) {
+  const wallets = [
+    {
+      kind: "hashpack" as const,
+      name: "HashPack",
+      tag: "Hedera-native",
+      fn: connectHashPack,
+    },
+    {
+      kind: "metamask" as const,
+      name: "MetaMask",
+      tag: "EVM · adds Hedera testnet",
+      fn: connectMetaMask,
+    },
+  ];
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="relative grid w-full max-w-2xl overflow-hidden rounded-2xl border border-hairline bg-panel shadow-2xl md:grid-cols-2"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* left: wallet list */}
+        <div className="border-b border-hairline p-6 md:border-b-0 md:border-r">
+          <h2 className="mb-5 text-lg font-bold text-ink-bright">
+            Connect a Wallet
+          </h2>
+          <div className="mb-2 text-xs font-semibold text-neon-cyan">
+            Installed
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {wallets.map((w) => (
+              <button
+                key={w.kind}
+                onClick={() => {
+                  onClose();
+                  w.fn();
+                }}
+                className="flex items-center gap-3 rounded-xl border border-transparent px-2.5 py-2 text-left transition-colors duration-200 hover:border-hairline hover:bg-surface"
+              >
+                <WalletBadge kind={w.kind} />
+                <span className="flex flex-col">
+                  <span className="font-bold text-ink-bright">{w.name}</span>
+                  <span className="text-xs text-ink-dim">{w.tag}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* right: what is a wallet */}
+        <div className="flex flex-col justify-center gap-5 p-6">
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="absolute right-4 top-4 grid h-7 w-7 place-items-center rounded-full bg-surface text-ink-dim transition-colors hover:text-ink-bright"
+          >
+            <X size={15} />
+          </button>
+          <h3 className="text-center text-base font-bold text-ink-bright">
+            What is a Wallet?
+          </h3>
+          <div className="flex items-start gap-3">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-neon-purple/15 text-neon-purple">
+              <Wallet size={16} />
+            </span>
+            <div>
+              <div className="text-sm font-bold text-ink-bright">
+                A Home for your Digital Assets
+              </div>
+              <p className="text-xs leading-relaxed text-ink-dim">
+                Wallets send, receive, store, and display digital assets like
+                HBAR and tokens.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-neon-cyan/15 text-neon-cyan">
+              <ShieldCheck size={16} />
+            </span>
+            <div>
+              <div className="text-sm font-bold text-ink-bright">
+                A New Way to Log In
+              </div>
+              <p className="text-xs leading-relaxed text-ink-dim">
+                Instead of new accounts and passwords on every site, just
+                connect your wallet.
+              </p>
+            </div>
+          </div>
+          <a
+            href="https://www.hashpack.app"
+            target="_blank"
+            rel="noreferrer"
+            className="mx-auto rounded-xl bg-gradient-to-r from-neon-purple to-neon-pink px-5 py-2 text-sm font-bold text-white no-underline transition-transform duration-200 hover:scale-[1.03]"
+          >
+            Get a Wallet
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ConnectButton() {
   const {
     displayAccount,
@@ -83,8 +217,10 @@ function ConnectButton() {
     connectHashPack,
     disconnect,
   } = useWallet();
-  const [open, setOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false); // connected popover
+  const [modalOpen, setModalOpen] = useState(false); // connect modal
   const [nativeId, setNativeId] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     setNativeId(null);
@@ -95,70 +231,87 @@ function ConnectButton() {
     }
   }, [displayAccount]);
 
+  // ---- connected: address button + disconnect popover ----
   if (displayAccount) {
     const label = displayAccount.startsWith("0x")
       ? nativeId ?? shortAddr(displayAccount)
       : displayAccount;
     return (
-      <button
-        onClick={disconnect}
-        title={`Connected via ${kind === "hashpack" ? "HashPack" : "MetaMask"} — click to disconnect`}
-        className="inline-flex items-center gap-2 rounded-xl border border-neon-purple/50 bg-neon-purple/10 px-3 py-2 font-mono text-xs font-bold text-ink-bright backdrop-blur-md transition-all duration-200 hover:border-neon-purple hover:shadow-[0_0_18px_-2px_var(--color-neon-purple)]"
-      >
-        <span className="h-1.5 w-1.5 rounded-full bg-neon-green" />
-        {label}
-      </button>
+      <div className="relative">
+        <button
+          onClick={() => setMenuOpen((o) => !o)}
+          className="inline-flex items-center gap-2 rounded-xl border border-neon-green/40 bg-neon-green/10 px-3 py-2 font-mono text-xs font-bold text-neon-green transition-all duration-200 hover:border-neon-green"
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-neon-green" />
+          {label}
+        </button>
+
+        {menuOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+            <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-72 rounded-2xl border border-hairline bg-panel p-4 shadow-2xl">
+              <div className="mb-1.5 text-xs font-semibold text-ink-dim">
+                Wallet Address
+              </div>
+              <button
+                onClick={() => {
+                  navigator.clipboard
+                    ?.writeText(displayAccount)
+                    .then(() => {
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 1200);
+                    })
+                    .catch(() => {});
+                }}
+                title="Click to copy"
+                className="mb-3 w-full break-all rounded-xl border border-hairline bg-surface px-3 py-2.5 text-left font-mono text-sm text-ink-bright transition-colors hover:border-neon-purple"
+              >
+                {copied ? "Copied!" : displayAccount}
+              </button>
+              <div className="mb-3 text-[11px] text-ink-dim">
+                Connected via {kind === "hashpack" ? "HashPack" : "MetaMask"}
+                {nativeId ? ` · ${nativeId}` : ""}
+              </div>
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
+                  disconnect();
+                }}
+                className="w-full rounded-xl border border-neon-red/40 bg-neon-red/10 py-2.5 text-sm font-bold text-neon-red transition-colors duration-200 hover:bg-neon-red/20"
+              >
+                Disconnect
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     );
   }
 
+  // ---- disconnected: connect button + modal ----
   return (
     <div className="relative">
       <button
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => setModalOpen(true)}
         disabled={connecting}
         className="inline-flex items-center gap-1.5 rounded-xl border border-hairline bg-surface/70 px-3 py-2 text-sm font-bold text-ink-bright backdrop-blur-md transition-all duration-200 hover:border-neon-cyan hover:text-neon-cyan disabled:opacity-60"
       >
         <Wallet size={15} />
         <span className="hidden sm:inline">
-          {connecting ? "Connecting…" : "Connect"}
+          {connecting ? "Connecting…" : "Connect Wallet"}
         </span>
-        <ChevronDown size={13} className="opacity-60" />
       </button>
 
-      {open && (
-        <div
-          onMouseLeave={() => setOpen(false)}
-          className="absolute right-0 top-[calc(100%+8px)] z-50 w-60 overflow-hidden rounded-2xl border border-hairline bg-panel/95 shadow-2xl backdrop-blur-xl"
-        >
-          {[
-            {
-              name: "HashPack",
-              hint: "Hedera-native · pairing modal",
-              fn: connectHashPack,
-            },
-            {
-              name: "MetaMask",
-              hint: "EVM · adds Hedera testnet",
-              fn: connectMetaMask,
-            },
-          ].map((w) => (
-            <button
-              key={w.name}
-              onClick={() => {
-                setOpen(false);
-                w.fn();
-              }}
-              className="flex w-full flex-col items-start gap-0.5 border-b border-hairline px-4 py-3 text-left transition-colors duration-200 last:border-b-0 hover:bg-neon-purple/10"
-            >
-              <span className="font-bold text-ink-bright">{w.name}</span>
-              <span className="text-xs text-ink-dim">{w.hint}</span>
-            </button>
-          ))}
-        </div>
+      {modalOpen && (
+        <ConnectModal
+          onClose={() => setModalOpen(false)}
+          connectHashPack={connectHashPack}
+          connectMetaMask={connectMetaMask}
+        />
       )}
 
       {walletError && (
-        <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-72 rounded-xl border border-neon-red/60 bg-panel/95 px-3 py-2 text-xs text-neon-red backdrop-blur-xl">
+        <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-72 rounded-xl border border-neon-red/60 bg-panel px-3 py-2 text-xs text-neon-red">
           {walletError}
         </div>
       )}
