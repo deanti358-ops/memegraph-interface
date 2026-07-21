@@ -37,6 +37,14 @@ export const VESTING_DAYS = 90;
 /** Fixed supply minted for every meme token. */
 export const TOKEN_SUPPLY = 1_000_000_000;
 
+/**
+ * The market only shows meme ids >= this value. The old test tokens live on
+ * the factory forever (on-chain, can't be deleted), so we hide everything
+ * below the cutoff to present a clean slate. Any newly launched token gets a
+ * higher id and appears automatically. Set to 1 to show everything again.
+ */
+export const MIN_VISIBLE_MEME_ID = 10;
+
 /** HCS topic holding meme provenance claims (see api/claim.ts). */
 export const CLAIMS_TOPIC_ID = "0.0.9638085";
 

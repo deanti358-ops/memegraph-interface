@@ -1,6 +1,6 @@
 import { Contract, formatUnits, type Signer } from "ethers";
 import { FACTORY_ABI, POOL_ABI, ERC20_ABI } from "../abi";
-import { network } from "../config";
+import { network, MIN_VISIBLE_MEME_ID } from "../config";
 import { readProvider } from "./wallet";
 
 /**
@@ -51,7 +51,7 @@ export async function fetchMemes(): Promise<MemeInfo[]> {
   const factory = factoryRead();
   const count = Number(await factory.memeCount());
   const memes: MemeInfo[] = [];
-  for (let i = count; i >= 1; i--) {
+  for (let i = count; i >= MIN_VISIBLE_MEME_ID; i--) {
     const m = await factory.getMeme(i);
     memes.push({
       id: i,

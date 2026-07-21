@@ -43,12 +43,14 @@ const COLUMNS: { title: string; links: { label: string; to: string; ext?: boolea
   },
 ];
 
+const ICON = "block h-[17px] w-[17px] shrink-0";
+
 const SOCIAL_LINKS = [
   {
     href: SOCIALS.x,
     label: "X",
     icon: (
-      <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
+      <svg viewBox="0 0 24 24" className={ICON} fill="currentColor" aria-hidden>
         <path d="M18.9 2H22l-6.8 7.8L23.2 22h-6.3l-4.9-6.4L6.4 22H3.3l7.3-8.3L1.6 2H8l4.4 5.9L18.9 2zm-1.1 18.1h1.7L7.1 3.8H5.3l12.5 16.3z" />
       </svg>
     ),
@@ -57,7 +59,7 @@ const SOCIAL_LINKS = [
     href: SOCIALS.github,
     label: "GitHub",
     icon: (
-      <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
+      <svg viewBox="0 0 24 24" className={ICON} fill="currentColor" aria-hidden>
         <path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.2.8-.6v-2c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.4-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0C17.2 4.9 18.2 5.2 18.2 5.2c.6 1.6.2 2.8.1 3.1.7.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.2c0 .3.2.7.8.6a11.5 11.5 0 0 0 7.8-10.9C23.5 5.7 18.3.5 12 .5z" />
       </svg>
     ),
@@ -66,12 +68,16 @@ const SOCIAL_LINKS = [
     href: SOCIALS.discord,
     label: "Discord",
     icon: (
-      <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
+      <svg viewBox="0 0 24 24" className={ICON} fill="currentColor" aria-hidden>
         <path d="M20.3 4.4A19.8 19.8 0 0 0 15.9 3l-.6 1.2a18.3 18.3 0 0 0-6.6 0L8.1 3a19.8 19.8 0 0 0-4.4 1.4C.9 8.6.1 12.7.5 16.7A20 20 0 0 0 6 19.5l1.3-1.9c-.7-.3-1.4-.6-2-1l.5-.4a14.2 14.2 0 0 0 12.4 0l.5.4c-.6.4-1.3.7-2 1l1.3 1.9a20 20 0 0 0 5.5-2.8c.5-4.6-.7-8.7-3.2-12.3zM8.5 14.2c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2zm7 0c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2z" />
       </svg>
     ),
   },
-  { href: `mailto:${CONTACT_EMAIL}`, label: "Contact us", icon: <Mail size={15} /> },
+  {
+    href: `mailto:${CONTACT_EMAIL}`,
+    label: "Contact us",
+    icon: <Mail className={ICON} aria-hidden />,
+  },
 ];
 
 export default function Footer() {
@@ -93,7 +99,7 @@ export default function Footer() {
             network-enforced royalty on every transfer — fast, gas-light,
             impossible to rug.
           </p>
-          <div className="flex gap-2">
+          <div className="flex gap-2.5">
             {SOCIAL_LINKS.map((s) => (
               <a
                 key={s.label}
@@ -102,7 +108,7 @@ export default function Footer() {
                 rel="noreferrer"
                 title={s.label}
                 aria-label={s.label}
-                className="grid h-9 w-9 place-items-center rounded-xl border border-hairline bg-panel/60 text-ink transition-all duration-200 hover:-translate-y-0.5 hover:border-neon-purple hover:text-neon-cyan"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-hairline bg-surface text-ink transition-colors duration-200 hover:border-neon-purple hover:text-ink-bright"
               >
                 {s.icon}
               </a>
