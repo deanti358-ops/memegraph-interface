@@ -1,5 +1,5 @@
 import { Buffer } from "buffer";
-// hashconnect (WalletConnect internals) expects a global Buffer
+// WalletConnect internals (used by Reown AppKit) expect a global Buffer
 if (!window.Buffer) window.Buffer = Buffer;
 
 import { StrictMode } from "react";
