@@ -1,31 +1,17 @@
 import { Contract, parseEther, MaxUint256, type Signer } from "ethers";
 import {
-  AccountId,
-  ContractExecuteTransaction,
-  ContractFunctionParameters,
-  ContractId,
-  Hbar,
-  TokenAssociateTransaction,
-  TokenId,
-  type Signer as HederaSigner,
-} from "@hashgraph/sdk";
-import BigNumber from "bignumber.js";
-import { network } from "../config";
-import {
   factoryRead,
   factoryWrite,
   poolWrite,
   tokenWrite,
   tokenRead,
   isAssociated,
-  tokenEntityId,
 } from "./memegraph";
-import { getHashConnect } from "./hashpack";
 
 /**
- * One trading interface, two signing backends:
- * - EthersAdapter: EVM wallets (MetaMask) via the JSON-RPC relay
- * - HashPackAdapter: native Hedera transactions signed through HashConnect
+ * The trading interface. Backed by EthersAdapter, which signs EVM
+ * transactions through whatever wallet Reown AppKit connected (MetaMask,
+ * HashPack via WalletConnect, Rainbow, …).
  *
  * `onStep` lets pages surface progress ("confirm in wallet…").
  */
@@ -171,186 +157,5 @@ export class EthersAdapter implements TxAdapter {
     });
     onStep("Claiming vested royalties…");
     await tx.wait();
-  }
-}
-
-// ---------------------------------------------------------------------------
-// HashPack (native Hedera transactions via HashConnect)
-// ---------------------------------------------------------------------------
-
-const UINT256_MAX = new BigNumber(2).pow(256).minus(1);
-
-function contractId(evmAddress: string): ContractId {
-  return ContractId.fromEvmAddress(0, 0, evmAddress);
-}
-
-function big(v: bigint): BigNumber {
-  return new BigNumber(v.toString());
-}
-
-/** Strip 0x for ContractFunctionParameters.addAddress. */
-function addr(evmAddress: string): string {
-  return evmAddress.toLowerCase();
-}
-
-export class HashPackAdapter implements TxAdapter {
-  private accountId: string;
-
-  constructor(accountId: string) {
-    this.accountId = accountId;
-  }
-
-  private signer(): HederaSigner {
-    return getHashConnect().getSigner(
-      AccountId.fromString(this.accountId)
-    ) as unknown as HederaSigner;
-  }
-
-  private async exec(
-    tx: ContractExecuteTransaction,
-    onStep: (msg: string) => void,
-    confirmMsg: string,
-    workingMsg: string
-  ) {
-    const signer = this.signer();
-    onStep(confirmMsg);
-    const frozen = await tx.freezeWithSigner(signer);
-    const resp = await frozen.executeWithSigner(signer);
-    onStep(workingMsg);
-    await resp.getReceiptWithSigner(signer);
-  }
-
-  /** Associate via a native TokenAssociateTransaction if needed. */
-  private async ensureAssociated(
-    token: string,
-    onStep: (msg: string) => void
-  ) {
-    if (await isAssociated(this.accountId, token)) return;
-    onStep("One-time setup: approve the token association in HashPack…");
-    const signer = this.signer();
-    const tx = new TokenAssociateTransaction()
-      .setAccountId(AccountId.fromString(this.accountId))
-      .setTokenIds([TokenId.fromString(tokenEntityId(token))]);
-    const frozen = await tx.freezeWithSigner(signer);
-    const resp = await frozen.executeWithSigner(signer);
-    await resp.getReceiptWithSigner(signer);
-  }
-
-  async launchMeme(
-    name: string,
-    symbol: string,
-    memo: string,
-    valueHbar: string,
-    onStep: (msg: string) => void
-  ) {
-    const tx = new ContractExecuteTransaction()
-      .setContractId(contractId(network.factoryAddress))
-      .setGas(4_000_000)
-      .setPayableAmount(Hbar.fromString(valueHbar))
-      .setFunction(
-        "launchMeme",
-        new ContractFunctionParameters()
-          .addString(name)
-          .addString(symbol)
-          .addString(memo)
-      );
-    await this.exec(tx, onStep, "Approve the launch in HashPack…", "Launching on Hedera…");
-    // Associate the creator with their token now, so royalty payouts and
-    // curve buys can't revert on an unassociated account later.
-    try {
-      const meme = await factoryRead().getMeme(await factoryRead().memeCount());
-      await this.ensureAssociated(meme.token, onStep);
-    } catch {
-      /* payouts will surface this later; not fatal to the launch */
-    }
-  }
-
-  async buy(
-    token: string,
-    pool: string,
-    hbarAmount: string,
-    minTokensOut: bigint,
-    onStep: (msg: string) => void
-  ) {
-    await this.ensureAssociated(token, onStep);
-    const tx = new ContractExecuteTransaction()
-      .setContractId(contractId(pool))
-      .setGas(1_500_000)
-      .setPayableAmount(Hbar.fromString(hbarAmount))
-      .setFunction(
-        "buy",
-        new ContractFunctionParameters().addUint256(big(minTokensOut))
-      );
-    await this.exec(tx, onStep, "Approve the buy in HashPack…", "Buying…");
-  }
-
-  async sellWithApproval(
-    token: string,
-    pool: string,
-    units: bigint,
-    minHbarOut: bigint,
-    ownerEvm: string,
-    onStep: (msg: string) => void
-  ) {
-    const allowance: bigint = await tokenRead(token).allowance(ownerEvm, pool);
-    if (allowance < units) {
-      const approveTx = new ContractExecuteTransaction()
-        .setContractId(contractId(token))
-        .setGas(1_000_000)
-        .setFunction(
-          "approve",
-          new ContractFunctionParameters()
-            .addAddress(addr(pool))
-            .addUint256(UINT256_MAX)
-        );
-      await this.exec(
-        approveTx,
-        onStep,
-        "Approve the spending allowance in HashPack…",
-        "Setting allowance…"
-      );
-    }
-    const sellTx = new ContractExecuteTransaction()
-      .setContractId(contractId(pool))
-      .setGas(1_500_000)
-      .setFunction(
-        "sell",
-        new ContractFunctionParameters()
-          .addUint256(big(units))
-          .addUint256(big(minHbarOut))
-      );
-    await this.exec(sellTx, onStep, "Approve the sell in HashPack…", "Selling…");
-  }
-
-  async distribute(token: string, onStep: (msg: string) => void) {
-    const tx = new ContractExecuteTransaction()
-      .setContractId(contractId(network.factoryAddress))
-      .setGas(1_500_000)
-      .setFunction(
-        "distributeRoyalties",
-        new ContractFunctionParameters().addAddress(addr(token))
-      );
-    await this.exec(
-      tx,
-      onStep,
-      "Approve the distribution in HashPack…",
-      "Distributing royalties…"
-    );
-  }
-
-  async claimCreator(token: string, onStep: (msg: string) => void) {
-    const tx = new ContractExecuteTransaction()
-      .setContractId(contractId(network.factoryAddress))
-      .setGas(1_500_000)
-      .setFunction(
-        "claimCreatorRoyalties",
-        new ContractFunctionParameters().addAddress(addr(token))
-      );
-    await this.exec(
-      tx,
-      onStep,
-      "Approve the claim in HashPack…",
-      "Claiming vested royalties…"
-    );
   }
 }

@@ -3,225 +3,82 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
-  useState,
   type ReactNode,
 } from "react";
-import { BrowserProvider, JsonRpcProvider, type Signer } from "ethers";
-import { network } from "../config";
-import { EthersAdapter, HashPackAdapter, type TxAdapter } from "./tx";
 import {
-  getHashConnect,
-  initHashConnect,
-  resetHashConnect,
-  accountEvmAddress,
-} from "./hashpack";
+  BrowserProvider,
+  JsonRpcProvider,
+  type Eip1193Provider,
+  type Signer,
+} from "ethers";
+import {
+  useAppKit,
+  useAppKitAccount,
+  useAppKitProvider,
+  useDisconnect,
+} from "@reown/appkit/react";
+import { network } from "../config";
+import { EthersAdapter, type TxAdapter } from "./tx";
+// Side-effect import: runs createAppKit() once so the hooks below have context
+// and the "Connect a Wallet" modal web component is mounted.
+import "./reown";
 
-type Eip1193 = {
-  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
-  on?: (event: string, cb: (...args: unknown[]) => void) => void;
-  removeListener?: (event: string, cb: (...args: unknown[]) => void) => void;
-};
-
-declare global {
-  interface Window {
-    ethereum?: Eip1193;
-  }
-}
-
-/** Read-only provider — works with no wallet installed. */
+/** Read-only provider — works with no wallet connected. */
 export const readProvider = new JsonRpcProvider(network.rpcUrl, network.chainId, {
   batchMaxCount: 1, // Hashio doesn't accept JSON-RPC batches
 });
 
-export type WalletKind = "metamask" | "hashpack";
-
 type WalletState = {
-  kind: WalletKind | null;
-  /** EVM address — used for balance/allowance reads for both wallet kinds */
+  /** EVM address of the connected account, or null */
   evmAddress: string | null;
-  /** What to show in the connect button: 0.0.x for HashPack, 0x… for EVM */
+  /** Same as evmAddress; the header resolves it to a 0.0.x id for display */
   displayAccount: string | null;
   connecting: boolean;
-  hasMetaMask: boolean;
   walletError: string | null;
-  connectMetaMask: () => Promise<void>;
-  connectHashPack: () => Promise<void>;
+  /** Open the Reown "Connect a Wallet" modal */
+  openConnect: () => void;
   disconnect: () => void;
   adapter: TxAdapter | null;
+  getSigner: () => Promise<Signer>;
 };
 
 const WalletCtx = createContext<WalletState | null>(null);
 
-async function ensureChain(eth: Eip1193) {
-  const chainId = (await eth.request({ method: "eth_chainId" })) as string;
-  if (parseInt(chainId, 16) === network.chainId) return;
-  try {
-    await eth.request({
-      method: "wallet_switchEthereumChain",
-      params: [{ chainId: network.chainIdHex }],
-    });
-  } catch {
-    await eth.request({
-      method: "wallet_addEthereumChain",
-      params: [
-        {
-          chainId: network.chainIdHex,
-          chainName: network.chainName,
-          nativeCurrency: { name: "HBAR", symbol: "HBAR", decimals: 18 },
-          rpcUrls: [network.rpcUrl],
-          blockExplorerUrls: [network.hashscanUrl],
-        },
-      ],
-    });
-  }
-}
-
-async function evmSigner(): Promise<Signer> {
-  if (!window.ethereum) throw new Error("No EVM wallet installed");
-  await ensureChain(window.ethereum);
-  const provider = new BrowserProvider(window.ethereum);
-  return provider.getSigner();
-}
-
 export function WalletProvider({ children }: { children: ReactNode }) {
-  const [kind, setKind] = useState<WalletKind | null>(null);
-  const [evmAddress, setEvmAddress] = useState<string | null>(null);
-  const [displayAccount, setDisplayAccount] = useState<string | null>(null);
-  const [hederaAccountId, setHederaAccountId] = useState<string | null>(null);
-  const [connecting, setConnecting] = useState(false);
-  const [walletError, setWalletError] = useState<string | null>(null);
-  const hasMetaMask = typeof window !== "undefined" && !!window.ethereum;
+  const { open } = useAppKit();
+  const { address, isConnected, status } = useAppKitAccount();
+  const { walletProvider } = useAppKitProvider<Eip1193Provider>("eip155");
+  const { disconnect: appkitDisconnect } = useDisconnect();
 
-  const applyHashPackSession = useCallback(async (accountIds: string[]) => {
-    const accountId = accountIds[0];
-    if (!accountId) return;
-    setKind("hashpack");
-    setHederaAccountId(accountId);
-    setDisplayAccount(accountId);
-    try {
-      setEvmAddress(await accountEvmAddress(accountId));
-    } catch {
-      setEvmAddress(null);
-    }
-  }, []);
+  const evmAddress = isConnected && address ? address : null;
 
-  // Restore an existing HashPack pairing on load.
-  useEffect(() => {
-    initHashConnect(
-      (session) => applyHashPackSession(session.accountIds),
-      () => {
-        setKind((k) => (k === "hashpack" ? null : k));
-        setHederaAccountId(null);
-      }
-    ).catch(() => {});
-  }, [applyHashPackSession]);
+  const getSigner = useCallback(async (): Promise<Signer> => {
+    if (!walletProvider) throw new Error("Connect a wallet first.");
+    const provider = new BrowserProvider(walletProvider, network.chainId);
+    return provider.getSigner();
+  }, [walletProvider]);
 
-  const connectMetaMask = useCallback(async () => {
-    if (!window.ethereum) {
-      window.open("https://metamask.io/download/", "_blank");
-      return;
-    }
-    setConnecting(true);
-    try {
-      await ensureChain(window.ethereum);
-      const accounts = (await window.ethereum.request({
-        method: "eth_requestAccounts",
-      })) as string[];
-      if (accounts[0]) {
-        setKind("metamask");
-        setEvmAddress(accounts[0]);
-        setDisplayAccount(accounts[0]);
-        setHederaAccountId(null);
-      }
-    } finally {
-      setConnecting(false);
-    }
-  }, []);
-
-  const connectHashPack = useCallback(async () => {
-    setConnecting(true);
-    setWalletError(null);
-    try {
-      // The WalletConnect relay refuses clients whose clock is skewed and
-      // hashconnect then retries forever — don't hang the UI on it.
-      await Promise.race([
-        initHashConnect(
-          (session) => applyHashPackSession(session.accountIds),
-          () => {
-            setKind((k) => (k === "hashpack" ? null : k));
-            setHederaAccountId(null);
-          }
-        ),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("relay-timeout")), 15_000)
-        ),
-      ]);
-      getHashConnect().openPairingModal();
-    } catch (e) {
-      // Start the next attempt from scratch rather than reusing a socket
-      // that may be stuck retrying with stale state.
-      resetHashConnect();
-      setWalletError(
-        (e as Error).message === "relay-timeout"
-          ? "Couldn't reach the WalletConnect relay (relay.walletconnect.com). Usual causes: a wrong system clock/time zone, or a DNS/network problem resolving that domain — switching DNS to 1.1.1.1 or 8.8.8.8 often fixes it."
-          : `HashPack connection failed: ${(e as Error).message}`
-      );
-    } finally {
-      setConnecting(false);
-    }
-  }, [applyHashPackSession]);
+  const adapter = useMemo<TxAdapter | null>(
+    () => (evmAddress ? new EthersAdapter(getSigner) : null),
+    [evmAddress, getSigner]
+  );
 
   const disconnect = useCallback(() => {
-    if (kind === "hashpack") {
-      getHashConnect()
-        .disconnect()
-        .catch(() => {});
-    }
-    setKind(null);
-    setEvmAddress(null);
-    setDisplayAccount(null);
-    setHederaAccountId(null);
-  }, [kind]);
-
-  // MetaMask account switches
-  useEffect(() => {
-    const eth = window.ethereum;
-    if (!eth?.on) return;
-    const onAccounts = (...args: unknown[]) => {
-      const accounts = args[0] as string[];
-      setKind((k) => {
-        if (k !== "metamask") return k;
-        setEvmAddress(accounts[0] ?? null);
-        setDisplayAccount(accounts[0] ?? null);
-        return accounts[0] ? k : null;
-      });
-    };
-    eth.on("accountsChanged", onAccounts);
-    return () => eth.removeListener?.("accountsChanged", onAccounts);
-  }, []);
-
-  const adapter = useMemo<TxAdapter | null>(() => {
-    if (kind === "metamask") return new EthersAdapter(evmSigner);
-    if (kind === "hashpack" && hederaAccountId)
-      return new HashPackAdapter(hederaAccountId);
-    return null;
-  }, [kind, hederaAccountId]);
+    appkitDisconnect().catch(() => {});
+  }, [appkitDisconnect]);
 
   return (
     <WalletCtx.Provider
       value={{
-        kind,
         evmAddress,
-        displayAccount,
-        connecting,
-        hasMetaMask,
-        walletError,
-        connectMetaMask,
-        connectHashPack,
+        displayAccount: evmAddress,
+        connecting: status === "connecting" || status === "reconnecting",
+        walletError: null,
+        openConnect: () => open(),
         disconnect,
         adapter,
+        getSigner,
       }}
     >
       {children}

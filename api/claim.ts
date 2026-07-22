@@ -22,7 +22,10 @@ import {
 const MIRROR = "https://testnet.mirrornode.hedera.com/api/v1";
 // .trim(): env values entered via CLI pipes can carry stray CR/LF
 const TOPIC_ID = (process.env.HCS_TOPIC_ID || "0.0.9638085").trim();
-const WINDOW_SEC = Number(process.env.CHALLENGE_WINDOW_SECONDS || 600);
+// 0 on testnet → launches proceed immediately after the claim is recorded on
+// HCS (provenance is still sealed); a real window (e.g. 24h) is planned for
+// mainnet via the CHALLENGE_WINDOW_SECONDS env var.
+const WINDOW_SEC = Number(process.env.CHALLENGE_WINDOW_SECONDS || 0);
 
 type Msg = {
   v: 1;
