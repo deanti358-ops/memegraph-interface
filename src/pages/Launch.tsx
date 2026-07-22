@@ -24,7 +24,11 @@ async function sha256Hex(file: File): Promise<string> {
  * seconds behind a just-filed claim — so a single fire-and-forget POST can
  * 404 silently and the token ships with placeholder art. Retry + verify.
  */
-async function uploadArtwork(file: File, hash: string): Promise<boolean> {
+async function uploadArtwork(
+  file: File,
+  hash: string,
+  verifyReadBack: boolean
+): Promise<boolean> {
   const b64 = await downscaleToB64(file);
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt > 0) await new Promise((r) => setTimeout(r, 4000));
@@ -35,8 +39,11 @@ async function uploadArtwork(file: File, hash: string): Promise<boolean> {
         body: JSON.stringify({ kind: "image", hash, data: b64 }),
       });
       if (!r.ok) continue;
-      // Believe the mirror node, not the POST: the image must be readable
-      // back from the topic or avatars will still show placeholder art.
+      invalidateTopicCache();
+      // When no image existed yet, believe the mirror node, not the POST:
+      // the image must be readable back or avatars still show placeholders.
+      // (Re-uploads can't use this check — the old image already answers.)
+      if (!verifyReadBack) return true;
       for (let check = 0; check < 5; check++) {
         await new Promise((res) => setTimeout(res, 2500));
         invalidateTopicCache();
@@ -134,12 +141,16 @@ export default function Launch() {
         }
 
         if (check.claimed) {
-          // Our own earlier claim — backfill the artwork if it isn't on
-          // Hedera yet (e.g. an earlier upload failed silently)
-          if (!(await hashHasImage(hash))) {
-            setStatus("Storing your meme's artwork on Hedera…");
-            backfilled = await uploadArtwork(file, hash);
-          }
+          // Our own earlier claim — (re)store the artwork. Covers uploads
+          // that failed silently AND lets a creator refresh old low-res art:
+          // the newest image message for a hash is the one displayed.
+          const hadImage = await hashHasImage(hash);
+          setStatus(
+            hadImage
+              ? "Refreshing your meme's artwork on Hedera…"
+              : "Storing your meme's artwork on Hedera…"
+          );
+          backfilled = await uploadArtwork(file, hash, !hadImage);
           // Enforce the challenge window
           if (now < check.claim.readyAt) {
             const opens = new Date(
@@ -176,7 +187,7 @@ export default function Launch() {
           // Not fatal if it fails (the claim already succeeded), but tell the
           // user instead of shipping a placeholder silently.
           setStatus("Storing your meme's artwork on Hedera…");
-          const stored = await uploadArtwork(file, hash);
+          const stored = await uploadArtwork(file, hash, true);
           if (!stored) {
             setStatus(
               "⚠ Artwork upload didn't confirm — launching anyway. Re-select the same image here later to restore it."

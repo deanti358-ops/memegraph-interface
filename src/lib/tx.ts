@@ -1,4 +1,4 @@
-import { Contract, parseEther, MaxUint256, type Signer } from "ethers";
+import { Contract, parseEther, type Signer } from "ethers";
 import {
   AccountId,
   ContractExecuteTransaction,
@@ -141,8 +141,11 @@ export class EthersAdapter implements TxAdapter {
     const signer = await this.getSigner();
     const allowance: bigint = await tokenRead(token).allowance(ownerEvm, pool);
     if (allowance < units) {
+      // Approve the exact sell amount: HTS allowances are int64-bounded, so
+      // the classic approve(MaxUint256) REVERTS on the ERC-20 facade
+      // (verified on testnet). Each sell re-approves what it needs.
       onStep("Approve the pool to spend your tokens…");
-      const atx = await tokenWrite(token, signer).approve(pool, MaxUint256, {
+      const atx = await tokenWrite(token, signer).approve(pool, units, {
         gasLimit: 1_000_000,
       });
       await atx.wait();
@@ -179,8 +182,6 @@ export class EthersAdapter implements TxAdapter {
 // ---------------------------------------------------------------------------
 // HashPack (native Hedera transactions via HashConnect)
 // ---------------------------------------------------------------------------
-
-const UINT256_MAX = new BigNumber(2).pow(256).minus(1);
 
 function contractId(evmAddress: string): ContractId {
   return ContractId.fromEvmAddress(0, 0, evmAddress);
@@ -296,6 +297,8 @@ export class HashPackAdapter implements TxAdapter {
   ) {
     const allowance: bigint = await tokenRead(token).allowance(ownerEvm, pool);
     if (allowance < units) {
+      // Exact-amount approve — approve(MaxUint256) reverts on HTS (int64
+      // allowance bound), which is what killed wallet sells.
       const approveTx = new ContractExecuteTransaction()
         .setContractId(contractId(token))
         .setGas(1_000_000)
@@ -303,7 +306,7 @@ export class HashPackAdapter implements TxAdapter {
           "approve",
           new ContractFunctionParameters()
             .addAddress(addr(pool))
-            .addUint256(UINT256_MAX)
+            .addUint256(big(units))
         );
       await this.exec(
         approveTx,

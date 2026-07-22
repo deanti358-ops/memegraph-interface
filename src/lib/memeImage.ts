@@ -9,24 +9,34 @@ import { network } from "../config";
 
 const TOPIC_ID = "0.0.9638085";
 
-/** Downscale + compress a meme to fit comfortably in chunked HCS messages. */
+/**
+ * Downscale + compress a meme to fit in chunked HCS messages. 512px long
+ * edge with high-quality resampling: cards render the art at ~300-400px,
+ * so the old 128px cap read as a blur. The SDK chunks the payload (~48
+ * messages worst case, a fraction of a cent on HCS).
+ */
+const MAX_EDGE = 512;
+const MAX_B64_CHARS = 48_000;
+
 export async function downscaleToB64(file: File): Promise<string> {
   const bitmap = await createImageBitmap(file);
-  const max = 128;
-  const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
+  const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
   const w = Math.max(1, Math.round(bitmap.width * scale));
   const h = Math.max(1, Math.round(bitmap.height * scale));
   const canvas = document.createElement("canvas");
   canvas.width = w;
   canvas.height = h;
-  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, w, h);
+  const ctx = canvas.getContext("2d")!;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(bitmap, 0, 0, w, h);
 
-  for (let q = 0.85; q >= 0.3; q -= 0.15) {
+  for (let q = 0.85; q >= 0.3; q -= 0.1) {
     const dataUrl = canvas.toDataURL("image/jpeg", q);
     const b64 = dataUrl.split(",")[1];
-    if (b64.length <= 14_000) return b64;
+    if (b64.length <= MAX_B64_CHARS) return b64;
   }
-  return canvas.toDataURL("image/jpeg", 0.25).split(",")[1].slice(0, 14_000);
+  return canvas.toDataURL("image/jpeg", 0.25).split(",")[1].slice(0, MAX_B64_CHARS);
 }
 
 type MirrorMessage = {

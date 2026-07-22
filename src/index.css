@@ -410,12 +410,12 @@ main {
   font-size: 0.95rem;
 }
 
-/* ---- cards ---- */
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(255px, 1fr));
-  gap: 1.05rem;
-}
+/* ---- cards ----
+   (the old `.grid` card-grid rule is gone: even inside @layer legacy its
+   grid-template-columns/gap leaked into every Tailwind `grid` utility —
+   Tailwind only sets display:grid, so the extra properties didn't conflict
+   and icon buttons laid their icons into 255px tracks, painting them far
+   outside the button.) */
 .card {
   background: var(--bg-raised);
   border: 1px solid var(--border);

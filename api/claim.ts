@@ -36,7 +36,7 @@ type Msg = {
   reason?: string;
   name?: string;
   symbol?: string;
-  /** kind:"image" — base64 JPEG, ≤16k chars; SDK chunks it onto the topic */
+  /** kind:"image" — base64 JPEG, ≤50k chars; SDK chunks it onto the topic */
   data?: string;
   ts: string;
 };
@@ -99,6 +99,9 @@ async function submitMessage(payload: Msg): Promise<number> {
   try {
     const tx = await new TopicMessageSubmitTransaction()
       .setTopicId(TOPIC_ID)
+      // 512px artwork payloads run ~50KB; the SDK default of 20 x 1KB
+      // chunks would reject them.
+      .setMaxChunks(60)
       .setMessage(JSON.stringify(payload))
       .execute(client);
     const receipt = await tx.getReceipt(client);
@@ -131,7 +134,7 @@ export default async function handler(req: any, res: any) {
 
       if (body.kind === "image") {
         const data = String(body.data || "");
-        if (!data || data.length > 16_000) {
+        if (!data || data.length > 50_000) {
           return res.status(400).json({ error: "image data missing or too large" });
         }
         // The claim this image belongs to was usually submitted seconds ago,
