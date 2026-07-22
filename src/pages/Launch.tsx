@@ -18,6 +18,37 @@ async function sha256Hex(file: File): Promise<string> {
     .join("");
 }
 
+/**
+ * Store the meme's artwork on the HCS topic and verify it actually landed.
+ * The API's claim-existence check reads the mirror node, which lags a few
+ * seconds behind a just-filed claim — so a single fire-and-forget POST can
+ * 404 silently and the token ships with placeholder art. Retry + verify.
+ */
+async function uploadArtwork(file: File, hash: string): Promise<boolean> {
+  const b64 = await downscaleToB64(file);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 4000));
+    try {
+      const r = await fetch("/api/claim", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ kind: "image", hash, data: b64 }),
+      });
+      if (!r.ok) continue;
+      // Believe the mirror node, not the POST: the image must be readable
+      // back from the topic or avatars will still show placeholder art.
+      for (let check = 0; check < 5; check++) {
+        await new Promise((res) => setTimeout(res, 2500));
+        invalidateTopicCache();
+        if (await hashHasImage(hash)) return true;
+      }
+    } catch {
+      /* network hiccup — retry */
+    }
+  }
+  return false;
+}
+
 const PROMISES = [
   "No admin key",
   "No fee-schedule key",
@@ -31,6 +62,9 @@ export default function Launch() {
 
   const [name, setName] = useState("");
   const [symbol, setSymbol] = useState("");
+  // The UI renders symbols as $SYMBOL everywhere, so a typed leading "$"
+  // would display as "$$ROSALIE" — strip it before it reaches the chain.
+  const cleanSymbol = symbol.trim().toUpperCase().replace(/^\$+/, "");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -80,6 +114,7 @@ export default function Launch() {
       //    reference is baked into the token's immutable memo. First claim
       //    wins; launching is only permitted after the challenge window.
       let memo = "";
+      let backfilled = false;
       if (file) {
         setStatus("Hashing your meme…");
         const hash = await sha256Hex(file);
@@ -100,16 +135,10 @@ export default function Launch() {
 
         if (check.claimed) {
           // Our own earlier claim — backfill the artwork if it isn't on
-          // Hedera yet (e.g. claims made before image storage existed)
+          // Hedera yet (e.g. an earlier upload failed silently)
           if (!(await hashHasImage(hash))) {
             setStatus("Storing your meme's artwork on Hedera…");
-            const b64 = await downscaleToB64(file);
-            await fetch("/api/claim", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({ kind: "image", hash, data: b64 }),
-            });
-            invalidateTopicCache();
+            backfilled = await uploadArtwork(file, hash);
           }
           // Enforce the challenge window
           if (now < check.claim.readyAt) {
@@ -135,7 +164,7 @@ export default function Launch() {
               hash,
               creator: displayAccount ?? evmAddress,
               name: name.trim(),
-              symbol: symbol.trim().toUpperCase(),
+              symbol: cleanSymbol,
             }),
           });
           const claim = await claimRes.json();
@@ -143,18 +172,15 @@ export default function Launch() {
             throw new Error(claim.error ?? "claim failed");
           }
 
-          // Store the artwork itself on Hedera, chunked onto the HCS topic
+          // Store the artwork itself on Hedera, chunked onto the HCS topic.
+          // Not fatal if it fails (the claim already succeeded), but tell the
+          // user instead of shipping a placeholder silently.
           setStatus("Storing your meme's artwork on Hedera…");
-          try {
-            const b64 = await downscaleToB64(file);
-            await fetch("/api/claim", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({ kind: "image", hash, data: b64 }),
-            });
-            invalidateTopicCache();
-          } catch {
-            /* artwork is cosmetic; the claim itself already succeeded */
+          const stored = await uploadArtwork(file, hash);
+          if (!stored) {
+            setStatus(
+              "⚠ Artwork upload didn't confirm — launching anyway. Re-select the same image here later to restore it."
+            );
           }
 
           if (claim.windowSec > 0) {
@@ -174,6 +200,13 @@ export default function Launch() {
         setStatus("Checking this meme isn't already tokenized…");
         const existing = (await fetchMemes()).find((m) => m.memeMemo === memo);
         if (existing) {
+          if (backfilled) {
+            // The user came back just to restore missing artwork — done.
+            setStatus("✓ Artwork restored on Hedera for your existing token.");
+            setBusy(false);
+            nav(`/t/${existing.id}`);
+            return;
+          }
           throw new Error(
             `This meme already has a live token (${existing.symbol ?? `#${existing.id}`}) — one claim, one token. Trade it instead.`
           );
@@ -183,7 +216,7 @@ export default function Launch() {
       // 3. Launch the token with the claim reference in its immutable memo.
       await adapter.launchMeme(
         name.trim(),
-        symbol.trim().toUpperCase(),
+        cleanSymbol,
         memo,
         LAUNCH_VALUE_HBAR,
         setStatus

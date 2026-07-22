@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
 import TokenAvatar from "./TokenAvatar";
-import CreatorId from "./CreatorId";
-import { fmtUsd } from "../lib/memegraph";
+import { displaySymbol, fmtUsd } from "../lib/memegraph";
 import { VESTING_DAYS, TOKEN_SUPPLY } from "../config";
 import type { TokenStats } from "../lib/stats";
 
@@ -46,35 +45,30 @@ export default function TokenCard({
         />
       </div>
 
-      {/* body */}
-      <div className="flex flex-1 flex-col gap-2 p-3">
-        <div className="flex items-baseline justify-between gap-2">
-          <h3 className="min-w-0 truncate text-[15px] font-bold text-ink-bright">
-            {t.name ?? "Unnamed"}
-          </h3>
-          <span className="shrink-0 text-xs font-semibold text-ink-dim">
-            ${t.symbol ?? "???"}
-          </span>
-        </div>
+      {/* body — somnia.meme card layout: name / symbol+age / mcap / progress */}
+      <div className="flex flex-1 flex-col p-3.5">
+        <h3 className="min-w-0 truncate text-[17px] font-bold leading-tight text-ink-bright">
+          {t.name ?? "Unnamed"}
+        </h3>
 
-        <div className="flex items-center justify-between text-[11px] text-ink-dim">
-          <span className="truncate">
-            <CreatorId addr={t.creator} link={false} />
+        <div className="mt-1 flex items-center justify-between text-xs text-ink-dim">
+          <span className="truncate font-semibold">
+            {displaySymbol(t.symbol) ?? "???"}
           </span>
           <span className="shrink-0">{ago(t.launchedAt)}</span>
         </div>
 
-        <div className="mt-0.5 flex items-baseline gap-1.5">
-          <span className="text-lg font-bold tabular-nums text-ink-bright">
+        <div className="mt-3">
+          <div className="text-xl font-bold tabular-nums leading-tight text-ink-bright">
             {mcap !== null ? fmtUsd(mcap) : "—"}
-          </span>
-          <span className="text-[11px] text-ink-dim">Market cap</span>
+          </div>
+          <div className="text-[11px] text-ink-dim">Market cap</div>
         </div>
 
         {/* creator-vesting progress bar (violet), somnia-style */}
-        <div className="mt-auto">
+        <div className="mt-auto pt-3">
           <div className="mb-1 flex items-center justify-between text-[11px]">
-            <span className="font-medium text-neon-purple">
+            <span className="font-semibold text-neon-purple">
               {vestPct.toFixed(1)}% vested
             </span>
             <span className="text-ink-dim">{(100 - vestPct).toFixed(0)}% left</span>

@@ -89,11 +89,24 @@ export function fmtTokens(units: bigint, dp = 2): string {
   return s.toLocaleString(undefined, { maximumFractionDigits: dp });
 }
 
-/** getPrice() 1e18 fixed point → HBAR per whole token */
+/**
+ * Plain-decimal formatting for numbers spanning meme-scale magnitudes.
+ * Never scientific notation: 0.00000075, not 7.5e-7.
+ */
+export function plainDecimal(n: number, sig = 2): string {
+  if (!isFinite(n) || n === 0) return "0";
+  const abs = Math.abs(n);
+  if (abs >= 1) {
+    return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  }
+  // Decimals needed to keep `sig` significant digits, capped for sanity
+  const decimals = Math.min(12, Math.ceil(-Math.log10(abs)) + sig - 1);
+  return n.toFixed(decimals).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+/** getPrice() 1e18 fixed point → HBAR per whole token, plain decimals */
 export function fmtPrice(price: bigint): string {
-  const p = Number(price) / 1e18;
-  if (p === 0) return "0";
-  return p.toLocaleString(undefined, { maximumSignificantDigits: 4 });
+  return plainDecimal(Number(price) / 1e18, 3);
 }
 
 export function shortAddr(addr: string): string {
@@ -119,12 +132,19 @@ export async function fetchHbarUsd(): Promise<number | null> {
   }
 }
 
-/** Compact dollar formatting across the huge range meme prices span. */
+/** Dollar formatting across the huge range meme prices span — always plain
+ *  decimals ($0.00000075), never scientific notation. */
 export function fmtUsd(usd: number): string {
   if (usd === 0) return "$0";
   if (usd >= 0.01)
     return `$${usd.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
-  return `$${usd.toPrecision(2).replace(/e-?\d+$/, (m) => `e${m.slice(1)}`)}`;
+  return `$${plainDecimal(usd, 2)}`;
+}
+
+/** Token symbol for display after a "$" prefix — tolerates legacy tokens
+ *  whose on-chain symbol already starts with "$" (e.g. $ROSALIE). */
+export function displaySymbol(symbol?: string): string | undefined {
+  return symbol?.replace(/^\$+/, "");
 }
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import type { Candle } from "../lib/tokenDetail";
+import { plainDecimal } from "../lib/memegraph";
 
 /**
  * Candlestick chart, TradingView-style: green up / red down bodies with
@@ -18,7 +19,7 @@ const DIM = "var(--color-ink-dim)";
 function fmtPrice(p: number): string {
   if (p === 0) return "0";
   if (p >= 1) return p.toLocaleString(undefined, { maximumSignificantDigits: 5 });
-  return p.toPrecision(4).replace(/e-?\d+$/, (m) => `e${m.slice(1)}`);
+  return plainDecimal(p, 3);
 }
 function fmtTime(t: number): string {
   const d = new Date(t * 1000);

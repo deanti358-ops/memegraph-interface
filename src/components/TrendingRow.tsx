@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Flame } from "lucide-react";
 import TokenAvatar from "./TokenAvatar";
-import { fmtHbar, fmtUsd } from "../lib/memegraph";
+import { displaySymbol, fmtHbar, fmtUsd } from "../lib/memegraph";
 import { TOKEN_SUPPLY } from "../config";
 import type { TokenStats } from "../lib/stats";
 
@@ -58,7 +58,7 @@ export default function TrendingRow({
                     {t.name ?? "Unnamed"}
                   </h3>
                   <span className="shrink-0 text-[11px] font-semibold text-ink-dim">
-                    ${t.symbol ?? "???"}
+                    ${displaySymbol(t.symbol) ?? "???"}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-[11px]">

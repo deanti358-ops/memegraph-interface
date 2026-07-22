@@ -19,7 +19,13 @@ import {
   TOKEN_DECIMALS,
   type MemeInfo,
 } from "../lib/memegraph";
-import { DEFAULT_SLIPPAGE_BPS, network } from "../config";
+import {
+  DEFAULT_SLIPPAGE_BPS,
+  network,
+  TOKEN_SUPPLY,
+  VESTING_DAYS,
+} from "../config";
+import { displaySymbol } from "../lib/memegraph";
 import Candles from "../components/Candles";
 import TokenAvatar from "../components/TokenAvatar";
 import CreatorId from "../components/CreatorId";
@@ -58,6 +64,15 @@ const TIMEFRAMES: { label: string; seconds: number }[] = [
   { label: "4h", seconds: 14400 },
   { label: "1d", seconds: 86400 },
 ];
+
+function ago(t: number): string {
+  const s = Math.max(1, Math.floor(Date.now() / 1000 - t));
+  if (s < 60) return `${s} seconds ago`;
+  if (s < 3600) return `${Math.floor(s / 60)} minutes ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)} hours ago`;
+  if (s < 2592000) return `${Math.floor(s / 86400)} days ago`;
+  return `${Math.floor(s / 2592000)} months ago`;
+}
 
 function StatRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -270,6 +285,34 @@ export default function Token() {
     }
   }
 
+  // ---- header stats: 24h change, 24h volume, creator-vesting progress ----
+  const dayAgo = Date.now() / 1000 - 86_400;
+  const change24h = (() => {
+    if (!d || !history || history.length === 0) return null;
+    const nowPrice = Number(d.price) / 1e18;
+    // last point at or before 24h ago, else the launch/seed point
+    let base = history[0].price;
+    for (const p of history) {
+      if (p.t <= dayAgo) base = p.price;
+      else break;
+    }
+    if (base <= 0) return null;
+    return ((nowPrice - base) / base) * 100;
+  })();
+  const volume24hHbar = trades
+    ? trades.reduce((acc, t) => (t.t >= dayAgo ? acc + t.hbarTinybar : acc), 0n)
+    : null;
+  const volume24hUsd =
+    volume24hHbar !== null && hbarUsd !== null
+      ? (Number(volume24hHbar) / 1e8) * hbarUsd
+      : null;
+  const vestPct = d
+    ? Math.max(
+        0,
+        Math.min(100, ((Date.now() / 1000 - d.launchedAt) / 86_400 / VESTING_DAYS) * 100)
+      )
+    : 0;
+
   if (!d) {
     return (
       <div className="py-16 text-center">
@@ -286,46 +329,99 @@ export default function Token() {
 
   return (
     <div>
-      {/* ---------- header ---------- */}
-      <div className="mb-4 flex flex-col gap-4 rounded-2xl border border-hairline bg-panel/50 p-5 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-3.5">
-          <TokenAvatar symbol={d.symbol} address={d.token} memo={d.memeMemo} size={56} />
+      {/* ---------- header (somnia-style: identity strip + stat tiles) ---------- */}
+      <div className="mb-4 rounded-2xl border border-hairline bg-panel/50 backdrop-blur-xl">
+        <div className="flex min-w-0 items-center gap-4 p-5">
+          <div className="h-[72px] w-[72px] shrink-0 overflow-hidden rounded-xl border border-hairline">
+            <TokenAvatar symbol={d.symbol} address={d.token} memo={d.memeMemo} rounded={false} fill />
+          </div>
           <div className="min-w-0">
-            <h1 className="truncate font-display text-2xl font-bold text-ink-bright">
-              {d.name ?? "…"}{" "}
-              <span className="font-mono text-base font-bold text-neon-cyan">
-                ${d.symbol ?? ""}
+            <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+              <h1 className="min-w-0 truncate font-display text-3xl font-bold leading-tight text-ink-bright">
+                {d.name ?? "…"}
+              </h1>
+              <span className="rounded-lg bg-surface px-2.5 py-1 font-mono text-sm font-bold text-ink-bright">
+                ${displaySymbol(d.symbol) ?? ""}
               </span>
-            </h1>
-            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-xs text-ink-dim">
-              <a href={hashscanAddr(d.token)} target="_blank" rel="noreferrer" className="hover:text-neon-cyan">
-                token {shortAddr(d.token)}
-              </a>
+            </div>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-dim">
+              <span>Created {ago(d.launchedAt)}</span>
               <span>·</span>
-              <a href={hashscanAddr(d.pool)} target="_blank" rel="noreferrer" className="hover:text-neon-cyan">
+              <a href={hashscanAddr(d.pool)} target="_blank" rel="noreferrer" className="font-mono hover:text-neon-cyan">
                 pool {shortAddr(d.pool)}
               </a>
               <span>·</span>
-              <span>
+              <span className="font-mono">
                 creator <CreatorId addr={d.creator} />
               </span>
             </div>
           </div>
         </div>
-        <div className="shrink-0 text-right">
-          <div className="font-mono text-2xl font-bold text-ink-bright">
-            {fmtPrice(d.price)} <span className="text-base text-ink-dim">ℏ</span>
-          </div>
-          <div className="text-xs text-ink-dim">
-            {hbarUsd !== null
-              ? `${fmtUsd((Number(d.price) / 1e18) * hbarUsd)} per token`
-              : "per token"}
-          </div>
-          {hbarUsd !== null && (
-            <div className="text-xs text-ink-dim">
-              mkt cap {fmtUsd((Number(d.price) / 1e18) * 1e9 * hbarUsd)}
+
+        <div className="grid grid-cols-2 gap-3 border-t border-hairline p-4 lg:grid-cols-4">
+          <div className="rounded-xl border border-hairline bg-surface/40 p-3.5">
+            <div className="text-xs text-ink-dim">Price</div>
+            <div className="mt-1 truncate font-mono text-xl font-bold text-ink-bright">
+              {hbarUsd !== null
+                ? fmtUsd((Number(d.price) / 1e18) * hbarUsd)
+                : `${fmtPrice(d.price)} ℏ`}
             </div>
-          )}
+            <div
+              className={`text-xs font-semibold ${
+                change24h === null || change24h >= 0 ? "text-neon-green" : "text-neon-red"
+              }`}
+            >
+              {change24h === null
+                ? "+0.00%"
+                : `${change24h >= 0 ? "+" : ""}${change24h.toFixed(2)}%`}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-hairline bg-surface/40 p-3.5">
+            <div className="text-xs text-ink-dim">Market Cap</div>
+            <div className="mt-1 truncate font-mono text-xl font-bold text-ink-bright">
+              {hbarUsd !== null
+                ? fmtUsd((Number(d.price) / 1e18) * TOKEN_SUPPLY * hbarUsd)
+                : "—"}
+            </div>
+            <div
+              className={`text-xs font-semibold ${
+                change24h === null || change24h >= 0 ? "text-neon-green" : "text-neon-red"
+              }`}
+            >
+              {change24h === null
+                ? "+0.00%"
+                : `${change24h >= 0 ? "+" : ""}${change24h.toFixed(2)}%`}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-hairline bg-surface/40 p-3.5">
+            <div className="text-xs text-ink-dim">24h Volume</div>
+            <div className="mt-1 truncate font-mono text-xl font-bold text-ink-bright">
+              {volume24hUsd !== null ? fmtUsd(volume24hUsd) : "—"}
+            </div>
+            <div className="text-xs text-ink-dim">
+              {volume24hHbar !== null ? `${fmtHbar(volume24hHbar, 1)} ℏ` : ""}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-hairline bg-surface/40 p-3.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-ink-dim">Vesting Progress</span>
+              <span className="font-mono text-sm font-bold text-ink-bright">
+                {vestPct.toFixed(1)}%
+              </span>
+            </div>
+            <div className="mt-2.5 h-2.5 overflow-hidden rounded-full bg-surface">
+              <div
+                className="h-full rounded-full bg-neon-purple transition-all duration-500"
+                style={{ width: `${Math.max(2, Math.min(100, vestPct))}%` }}
+              />
+            </div>
+            <div className="mt-1.5 text-[11px] text-ink-dim">
+              creator royalties unlock over {VESTING_DAYS} days
+            </div>
+          </div>
         </div>
       </div>
 

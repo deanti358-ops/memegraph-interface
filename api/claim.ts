@@ -134,7 +134,14 @@ export default async function handler(req: any, res: any) {
         if (!data || data.length > 16_000) {
           return res.status(400).json({ error: "image data missing or too large" });
         }
-        const existing = await scanTopic(hash);
+        // The claim this image belongs to was usually submitted seconds ago,
+        // and the mirror node lags consensus — retry before rejecting, or a
+        // launch's artwork upload 404s and the token ships without its meme.
+        let existing = await scanTopic(hash);
+        for (let i = 0; !existing && i < 3; i++) {
+          await new Promise((r) => setTimeout(r, 2000));
+          existing = await scanTopic(hash);
+        }
         if (!existing) {
           return res.status(404).json({ error: "no claim for this hash" });
         }

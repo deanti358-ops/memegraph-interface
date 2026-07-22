@@ -1,6 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Copy, Check, ExternalLink, User } from "lucide-react";
-import { fmtHbar, fmtTokens, fmtUsd, shortAddr, hashscanAddr } from "../lib/memegraph";
+import {
+  fmtHbar,
+  fmtTokens,
+  fmtUsd,
+  shortAddr,
+  hashscanAddr,
+  hederaAccountId,
+} from "../lib/memegraph";
 import type { Trade, Holder } from "../lib/tokenDetail";
 
 function timeAgo(t: number): string {
@@ -25,6 +32,16 @@ export function AddressCard({
   badge?: string;
 }) {
   const [copied, setCopied] = useState(false);
+  // Long-zero EVM addresses read as "0x0000…D6a2" — resolve and lead with
+  // the native 0.0.x id, which is what Hedera users recognize.
+  const [nativeId, setNativeId] = useState<string | null>(null);
+  useEffect(() => {
+    setNativeId(null);
+    hederaAccountId(address)
+      .then(setNativeId)
+      .catch(() => {});
+  }, [address]);
+
   return (
     <div className="rounded-2xl border border-hairline bg-panel/50 p-4">
       <div className="mb-1.5 flex items-center gap-2">
@@ -35,40 +52,47 @@ export function AddressCard({
           </span>
         )}
       </div>
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-3">
         <a
           href={hashscanAddr(address)}
           target="_blank"
           rel="noreferrer"
-          className="truncate font-mono text-sm text-ink-bright hover:text-neon-cyan"
+          className="min-w-0 no-underline"
           title={address}
         >
-          {shortAddr(address)}
+          <span className="block truncate font-mono text-base font-bold text-ink-bright hover:text-neon-cyan">
+            {nativeId ?? shortAddr(address)}
+          </span>
+          {nativeId && (
+            <span className="block truncate font-mono text-[11px] text-ink-dim">
+              {shortAddr(address)}
+            </span>
+          )}
         </a>
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-2">
           <a
             href={hashscanAddr(address)}
             target="_blank"
             rel="noreferrer"
-            className="grid h-7 w-7 place-items-center rounded-lg border border-hairline text-ink-dim transition-colors hover:text-ink-bright"
+            className="grid h-9 w-9 place-items-center rounded-lg border border-hairline bg-surface/60 text-ink transition-colors hover:border-neon-cyan hover:text-neon-cyan"
             title="View on HashScan"
           >
-            <ExternalLink size={13} />
+            <ExternalLink size={16} />
           </a>
           <button
             onClick={() => {
               navigator.clipboard
-                ?.writeText(address)
+                ?.writeText(nativeId ?? address)
                 .then(() => {
                   setCopied(true);
                   setTimeout(() => setCopied(false), 1200);
                 })
                 .catch(() => {});
             }}
-            className="grid h-7 w-7 place-items-center rounded-lg border border-hairline text-ink-dim transition-colors hover:text-ink-bright"
+            className="grid h-9 w-9 place-items-center rounded-lg border border-hairline bg-surface/60 text-ink transition-colors hover:border-neon-purple hover:text-ink-bright"
             title="Copy address"
           >
-            {copied ? <Check size={13} className="text-neon-green" /> : <Copy size={13} />}
+            {copied ? <Check size={16} className="text-neon-green" /> : <Copy size={16} />}
           </button>
         </div>
       </div>
