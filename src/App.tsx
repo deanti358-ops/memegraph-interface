@@ -9,6 +9,7 @@ import Launch from "./pages/Launch";
 import Token from "./pages/Token";
 import Creators from "./pages/Creators";
 import Whitepaper from "./pages/Whitepaper";
+import Profile from "./pages/Profile";
 
 function App() {
   const [trades, setTrades] = useState<RecentTrade[] | null>(null);
@@ -46,6 +47,7 @@ function App() {
           <Route path="/t/:id" element={<Token />} />
           <Route path="/creators" element={<Creators />} />
           <Route path="/whitepaper" element={<Whitepaper />} />
+          <Route path="/profile" element={<Profile />} />
         </Routes>
       </main>
 

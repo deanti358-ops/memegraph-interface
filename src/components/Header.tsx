@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
-import { Rocket, Wallet, Sun, Moon, Menu, X } from "lucide-react";
+import { Rocket, Wallet, Sun, Moon, Menu, X, User } from "lucide-react";
 import { useWallet } from "../lib/wallet";
 import { hederaAccountId, shortAddr } from "../lib/memegraph";
 import { ACTIVE_NETWORK } from "../config";
 import { applyTheme, type Theme } from "../lib/theme";
 import BrandMark from "./BrandMark";
+import { loadProfilePic, PROFILE_EVENT } from "../pages/Profile";
 
 const NAV = [
   { to: "/", label: "Market", end: true },
@@ -70,6 +71,29 @@ function ThemeToggle() {
         </span>
       </span>
     </button>
+  );
+}
+
+function ProfileButton() {
+  const [pic, setPic] = useState<string | null>(loadProfilePic());
+  useEffect(() => {
+    const sync = () => setPic(loadProfilePic());
+    window.addEventListener(PROFILE_EVENT, sync);
+    return () => window.removeEventListener(PROFILE_EVENT, sync);
+  }, []);
+  return (
+    <Link
+      to="/profile"
+      title="Profile"
+      aria-label="Profile"
+      className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full border border-hairline bg-surface/70 text-ink backdrop-blur-md transition-all duration-200 hover:border-neon-purple hover:text-ink-bright"
+    >
+      {pic ? (
+        <img src={pic} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <User size={16} />
+      )}
+    </Link>
   );
 }
 
@@ -173,10 +197,10 @@ export default function Header() {
           className="flex shrink-0 items-center gap-2.5 no-underline"
           onClick={() => setMenuOpen(false)}
         >
-          <BrandMark size={34} />
-          <span className="font-display text-xl font-bold tracking-tight text-ink-bright">
-            Meme
-            <span className="bg-gradient-to-r from-neon-pink to-neon-cyan bg-clip-text text-transparent">
+          <BrandMark size={36} />
+          <span className="font-display text-[21px] font-extrabold lowercase tracking-tight text-ink-bright">
+            meme
+            <span className="bg-gradient-to-r from-neon-purple to-neon-cyan bg-clip-text text-transparent">
               graph
             </span>
           </span>
@@ -217,6 +241,7 @@ export default function Header() {
             Launch Token
           </Link>
           <ThemeToggle />
+          <ProfileButton />
           <ConnectButton />
           <button
             onClick={() => setMenuOpen((o) => !o)}
