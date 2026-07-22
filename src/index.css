@@ -51,6 +51,15 @@
   }
 }
 
+/* Reown AppKit modal — the host carries class="open" when opened and animates
+   opacity 0→1 via a CSS transition. Force it visible immediately: some
+   environments (and automation browsers) freeze the transition timeline,
+   leaving the modal stuck at opacity 0. Unlayered so it beats utilities. */
+w3m-modal.open {
+  opacity: 1 !important;
+  transition: none !important;
+}
+
 
 @layer legacy {
 :root {
